@@ -4,7 +4,7 @@ from langchain.agents import initialize_agent, AgentType
 from langchain.chat_models import ChatAnthropic
 from langchain.chat_models import ChatOpenAI
 from langchain import LLMChain
-
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
 from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
 from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain
@@ -14,6 +14,11 @@ from pydantic import BaseModel, Field
 import requests
 from typing import Optional
 import openai
+from langchain.tools import GooglePlacesTool
+import os
+import pickle
+
+os.environ["GPLACES_API_KEY"] = "AIzaSyAuj7gPxOpEWM6V6ckw0aErmR5FKS1-poI"
 
 
 def find_zpid(
@@ -50,6 +55,10 @@ def post_process_house_property(house_property):
     house_property.pop('listed_by')
     house_property.pop('priceHistory')
     house_property.pop('resoFacts')
+    house_property.pop('taxHistory') 
+    # house_property.pop('mlsDisclaimer')
+    
+    print(house_property)
     return house_property
 
 def get_house_property(
@@ -82,7 +91,8 @@ def get_house_property(
 
 def get_quesion(x: Optional[str] = None):
     return x
-
+from langchain.memory.chat_message_histories import FileChatMessageHistory
+from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 
 class Model():
     def __init__(self):
@@ -97,7 +107,7 @@ class Model():
         search_tool = Tool(
             name="SEARCH INFO ABOUT HOUSE USING IT'S ADDRESS",
             func=get_house_property,
-            description="useful when need to search for infor about house located in specific address",
+            description="useful when need to search for info about house located in specific address",
             args_schema = SearchInput
         )
 
@@ -108,9 +118,9 @@ class Model():
             args_schema = AdditionalInfo
         )
         
-        tools = [search_tool]
+        tools = [search_tool,GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=5))]
         
-        prefix = """You are a real estate agent, have a conversation with a human, answering the following questions or ask for additional information as best you can, be polite and nice. Do not mention address in each response, if you need some additional info ask a person about it . You have access to the following tools:"""
+        prefix = """Have a conversation with a client, answer on questions like human real estate agent. Do not mention house address in each response. Ask clarifying questions to help client. Try not to sound repetative and don't output answers like facts. You have access to the following tools:"""
         suffix = """Begin!"
 
         {chat_history}
@@ -123,26 +133,53 @@ class Model():
             suffix=suffix,
             input_variables=["input", "chat_history", "agent_scratchpad"],
         )
+        # self.chat_history_memory = FileChatMessageHistory("chat_history.txt")
+        # initial_memory = self.chat_history_memory.messages
         self.memory = ConversationBufferMemory(memory_key="chat_history")
-        llm = OpenAI(temperature=0,openai_api_key="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")
+        llm = OpenAI(temperature=0.5,openai_api_key="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",max_tokens=512)
+        self.llm = llm
         llm_chain = LLMChain(llm=llm, prompt=prompt)
-        agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools, allowed_tools=["SEARCH INFO ABOUT HOUSE USING IT'S ADDRESS"], verbose=True, max_iterations=5,
+        agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools, allowed_tools=["SEARCH INFO ABOUT HOUSE USING IT'S ADDRESS",'google_places'], verbose=True, max_iterations=5,
     early_stopping_method="generate")
         # agent_kwargs = {
         #     "extra_prompt_messages": [ConversationBufferMemory(memory_key="memory", return_messages=True)],
         # }
         # self.agent_chain = initialize_agent(
-        #     tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True, agent_kwargs=agent_kwargs
+        #     tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, ver bose=True, agent_kwargs=agent_kwargs
         #     )
-
-        self.agent_chain = AgentExecutor.from_agent_and_tools(
-            agent=agent, tools=tools, verbose=True, memory=self.memory, handle_parsing_errors=True, max_iterations=3,allowed_tools=["SEARCH INFO ABOUT HOUSE USING IT'S ADDRESS"],
+        self.agent_chain = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True, memory=self.memory, handle_parsing_errors=True, max_iterations=3,allowed_tools=["SEARCH INFO ABOUT HOUSE USING IT'S ADDRESS",'google_places'],
         early_stopping_method="generate"
         )
+        
     def response(self,user_input):
         self.clip_context()
-        return self.agent_chain.run(user_input)
+        ai_response = self.agent_chain.run(user_input)
+        # self.chat_history_memory.add_user_message(user_input)
+        # self.chat_history_memory.add_ai_message(ai_response)
+        print(self.memory.chat_memory.messages)
+        self.memory.chat_memory.messages.pop(0)
+        self.memory.chat_memory.messages.pop(0)
+        return self.refine_ai_response(user_input,ai_response)
+
+    def refine_ai_response(self,user_input,rough_ai_response):
+        llm = ChatOpenAI(temperature=0.5,openai_api_key="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")
+        messages = [
+            SystemMessage(
+                content=f"""You are real estate agent, have a convercation with client, please answer on this client's message. Use information below to proceed 
+        {rough_ai_response}"""
+            ),
+            HumanMessage(
+                content=f"""Client message: {user_input}
+        AI: """
+            ),
+        ]
+        refined_response = llm(messages).content
         
+        return refined_response
+
+    def save_last_memory_into_pickle(self):
+        pickled_str = pickle.dumps(self.memory)
+
     def get_content_length(self):
         total_length = 0
         for message in self.memory.chat_memory.messages:
@@ -154,4 +191,5 @@ class Model():
             print("Removed two messages")
             self.memory.chat_memory.messages.pop(0)
             self.memory.chat_memory.messages.pop(0)
+            # self.chat_history_memory.clear()
         
