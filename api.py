@@ -1,13 +1,9 @@
-from typing import Union
-from fastapi import FastAPI
-from ai_model import Model
-from pydantic import BaseModel
-from fastapi import Request
-import openai
 import requests
-import re
 import os
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request
+from ai_model import Model
+
 
 # Load .env file
 load_dotenv()

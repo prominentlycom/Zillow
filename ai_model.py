@@ -1,30 +1,17 @@
-from langchain.prompts import MessagesPlaceholder
-from langchain.memory import ConversationBufferMemory
-from langchain.agents import initialize_agent, AgentType
-from langchain.chat_models import ChatAnthropic
-from langchain.chat_models import ChatOpenAI
-from langchain import LLMChain
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
-from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
-from langchain.memory import ConversationBufferMemory
-from langchain import OpenAI, LLMChain
-from langchain.utilities import GoogleSearchAPIWrapper
-from human_tool import HumanInputRun
+
 from pydantic import BaseModel, Field
 import requests
-from langchain.tools import StructuredTool
-from typing import Optional
-import openai
-from langchain.tools import GooglePlacesTool
-import os
-import pickle
-from langchain.memory.chat_message_histories import FileChatMessageHistory
-from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 import re
-import googlemaps
-import langchain
 import os
+from typing import Optional
 from dotenv import load_dotenv
+import googlemaps
+from langchain.agents import initialize_agent, Tool
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+from langchain.memory import ConversationBufferMemory
+from langchain.tools import GooglePlacesTool
+from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 
 # Load .env file
 load_dotenv()
@@ -55,13 +42,11 @@ def find_zpid(
 
     # print(f'Search with {querystring}')
     result = requests.get(base_url, params=querystring, headers=headers)
-    print(f'ZPID = {result.json()}')
     try :
         if isinstance(result.json(),list):
             return result.json()[0]["zpid"]
         return result.json()["zpid"]
     except :
-        print('EXCEPTION')
         return "Sorry, could you please give full address"
 
 def post_process_house_property(house_property):
