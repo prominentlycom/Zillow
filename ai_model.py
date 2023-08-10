@@ -50,6 +50,7 @@ def find_zpid(
         return "Sorry, could you please give full address"
 
 def post_process_house_property(house_property):
+    """Remove some information from zillow listing to fit into LLM's context """
     # house_property.pop('nearbyHomes')
     house_property.pop('listed_by')
     house_property.pop('priceHistory')
@@ -57,7 +58,6 @@ def post_process_house_property(house_property):
     house_property.pop('taxHistory') 
     # house_property.pop('mlsDisclaimer')
     
-    print(house_property)
     return house_property
 
 def get_house_property(
@@ -88,20 +88,14 @@ def get_house_property(
     post_processed = post_process_house_property(result.json())
     return post_processed
 
-def get_quesion(x: Optional[str] = None):
-    return x
-
 
 def find_distance(addresses:str) -> str:
     '''Find distance tool, useful when need to find distance between two exact addresses'''
-    print("FIND DISTANCE FUNCTION")
     address1, address2 = addresses.split('|')
-    print(address1,address2)
     address_regex = '\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}'
     match = re.search(address_regex, address2)
     if not match:
         address2 = GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=1)).run(f'{address2} near {address1}').split('Address:')[1].split('\n')[0]
-    print('distance between', address2, address1)
     gmaps = googlemaps.Client(key='AIzaSyAuj7gPxOpEWM6V6ckw0aErmR5FKS1-poI')
     data = gmaps.distance_matrix(address1,address2)
     my_dist =data['rows'][0]['elements'][0]
@@ -141,9 +135,7 @@ def get_info_about_nearby_homes(location:str) -> str:
         raise Exception("Didn't get zpid")
         
 
-    # print(f'Search with {querystring}')
     result = requests.get(base_url, params=querystring, headers=headers)
-    # print(result.json())
     post_processed = result.json()['nearbyHomes']
     return post_processed
 
@@ -154,9 +146,6 @@ class Model():
         class SearchInput(BaseModel):
             query: str = Field(description="should be an address in similar to this format 18070 Langlois Rd SPACE 212, Desert Hot Springs, CA 92241")
 
-        class AdditionalInfo(BaseModel):
-            add: str = Field(description="should be a question regarding information that needed to answer on person question")
-            
         search_tool = Tool(
             name="Search Tool",
             func=get_house_property,
@@ -164,12 +153,10 @@ class Model():
             args_schema = SearchInput
         )
 
-        # find_distance_tool = StructuredTool.from_function(find_distance)
         find_distance_tool = Tool(
             name="Find distance tool",
             func=find_distance,
             description="useful when need to find distance between two addresses. You may use google_places tool to find address. The input to this tool should be a | separated list of addresses of length two, representing the two addresses you want to find distance between. For example, `13545 Cielo Azul Way, Desert Hot Springs, CA 92240|12105 Palm Dr, Desert Hot Springs, CA 92240` would be the input if you wanted to find distance between 13545 Cielo Azul Way, Desert Hot Springs, CA 92240 and 12105 Palm Dr, Desert Hot Springs, CA 92240.",
-            # args_schema = AdditionalInfo
         )
 
         find_nearby_homes = Tool(
@@ -201,9 +188,11 @@ class Model():
         self.agent_chain = initialize_agent(tools,llm,memory=self.memory,agent="chat-zero-shot-react-description", verbose=True,early_stopping_method="generate",max_iterations=5, handle_parsing_errors=_handle_error)
 
     def split_messages(self,text):
+        """Function to split chat history and return them as two separete lists. Last user message is skipped."""
         user_messages, ai_messages = [],[]
         for single_sample in text.split('You:'):
             if single_sample.strip() != '':
+                #skip user message
                 if len(single_sample.split("AI:")) == 2:
                     user_message, ai_message = single_sample.split("AI:")
                     user_message = user_message.strip()
@@ -215,12 +204,14 @@ class Model():
         return user_messages, ai_messages
 
     def add_memory(self,user_messages, ai_messages):
+        """Add memory into LLM agent"""
         messages = zip(user_messages,ai_messages)
         history_length = len(list(messages))
         i = 0
         previous_human_messages = []
         previous_ai_messages = []
         for user_message,ai_message in zip(user_messages,ai_messages): 
+            #Add only two last messages from AI and USER
             if i >= history_length-2:
                 self.memory.chat_memory.add_user_message(user_message)
                 self.memory.chat_memory.add_ai_message(ai_message)
@@ -230,14 +221,17 @@ class Model():
         return previous_human_messages, previous_ai_messages
         
     def response(self,user_input,message_history):
+        """Repsond on user's message"""
         user_messages, ai_messages = self.split_messages(message_history)
         previous_human_messages, previous_ai_messages = self.add_memory(user_messages, ai_messages)
+        #remove first AI and user message if it doesn't fit into memory
         self.clip_context()
         ai_response = self.agent_chain.run(user_input)
-        return self.refine_ai_response(user_input,ai_response,previous_human_messages, previous_ai_messages)
+        return self.enhance_ai_response(user_input,ai_response,previous_human_messages, previous_ai_messages)
 
-    def refine_ai_response(self,user_input,rough_ai_response,previous_human_messages, previous_ai_messages):
-        llm = ChatOpenAI(temperature=0.0,openai_api_key="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",max_tokens=1200)
+    def enhance_ai_response(self,user_input,rough_ai_response,previous_human_messages, previous_ai_messages):
+        """Additional ChatGPT request to enhance AI response"""
+        llm = ChatOpenAI(temperature=0.0,max_tokens=1200)
         messages = [
                     SystemMessage(
                         content=f"""The AI is a friendly, helpful and supportive real estate agent named Rick, have a conversation with client, please answer on this client's message.  Don't provide general information If the user message is something like "I am interested in [address]". Do not sound repetative or too much like a servant.

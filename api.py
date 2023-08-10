@@ -16,14 +16,17 @@ app = FastAPI()
 @app.post('/send_message_to_ai')
 async def send_message_to_ai(request:Request):
     chatmodel = Model()
+
     res = await request.json()
     user_message = res['customData']['message']
     address = res['customData']['address']
     message_history = res['customData']['message_history']
     email = res.get('email')
     phone = res.get('phone')
+    
     user_query = f'{user_message} +  I am interested in {address}'
     ai_response = chatmodel.response(user_query,message_history)
+    ## make post request on GHL's inbound webhook
     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'bot_response' : ai_response, 'phone':phone,'email':email})
     return {'bot_response' : ai_response}
 
