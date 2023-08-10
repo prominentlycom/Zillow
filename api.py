@@ -9,7 +9,8 @@ from ai_model import Model
 load_dotenv()
 
 # Read an environment variable
-os.environ["OPENAI_API_KEY"] =  os.getenv('GPLACES_API_KEY')
+os.environ["OPENAI_API_KEY"] =  os.getenv('OPENAI_API_KEY')
+os.environ["GPLACES_API_KEY"] =  os.getenv('GPLACES_API_KEY')
 
 app = FastAPI()
 

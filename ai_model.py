@@ -16,11 +16,6 @@ from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 # Load .env file
 load_dotenv()
 
-# Read an environment variable
-os.environ["GPLACES_API_KEY"] =  os.getenv('GPLACES_API_KEY')
-
-
-
 
 def find_zpid(
     location: Optional[str] = None, 
