@@ -20,6 +20,8 @@ async def send_message_to_ai(request:Request):
 
     res = await request.json()
     user_message = res['customData']['message']
+    if '[' in user_message:
+        user_message = user_message.split('[')
     address = res['customData']['address']
     message_history = res['customData']['message_history']
     email = res.get('email')
