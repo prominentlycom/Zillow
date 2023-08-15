@@ -34,7 +34,7 @@ To set up and use the project, follow these steps:
    uvicorn api:app --host 0.0.0.0 --reload
    ```
 
-6. The API endpoints will now be accessible for integration with the GHL+Zappychat platforms.
+6. The API endpoints will now be accessible for integration with the GHL+Zappychat platforms. You might need to change the IP address in GHL for webhooks on this API.
 
 ## API Endpoints
 
@@ -54,7 +54,17 @@ The following API endpoints are available for interacting with the integrated ch
    }
    ```
 
-
+2. `/get_summary` (POST): This endpoint receives message history and returns the questions that were not answered by AI, so that agent could gather more information about user needs:
+   ```json
+   {
+     "email": "user's email", (optional, but is required for sending email via GHL)
+     "phone": "user's phone number", (optional, but is required for sending sms via GHL)
+     "customData":{
+        "message_history":"message history in following format You: user_message AI:ai_message You: user_message AI: ai_message"
+     }
+     ...
+   }
+   ```
 ## Usage Examples
 
 To interact with the integrated chatbot, you can use the following examples:
@@ -71,5 +81,46 @@ To interact with the integrated chatbot, you can use the following examples:
 
    ```
 
+2. **Get summary**:
+   ```shell
+    curl -X POST -H "Content-Type: application/json" -d '{
+        "customData": {
+            "message_history": "You:user_message AI:ai_response  You : ...."
+        }
+    }' http://ip_address:8000/get_summary
+
+   ```
+
+Note. To send the response within GHL phone number or email address is required. Check more in workflows that are used to send messages.
+
 ## Additional info
-There are also other endpoints that were meant to be used as custom webhooks, however since custom webhooks were working poorly in GHL, the decision of using inbound webhook + webhook in GHL was made, therefor using other webhooks was not that convinient anymore and they were replaced by Zapier webhooks.
+There are also other endpoints that were meant to be used as custom webhooks, however since custom webhooks were working poorly in GHL, the decision of using inbound webhook + webhook in GHL was made, therefore using other webhooks was not that convinient anymore and they were replaced by Zapier webhooks.
+
+## GHL workflows
+There is a folder in GHL>Automation that was used only for this project and it is named "Test Workflow with inbound webhooks", and there are several workflows that are used to combine everything, here is brief description of each one:
+
+- 0.0 Get user message :
+   
+   Workflow that receives user message and passes it through different zapier webhooks (webhook to extract address; webhook to determine whether extra info is needed, if so langchain is used otherwise ZC; check if message is related to booking, then switch to booking workflow).Depending on these webhooks, workflow branches on using LangChain to answer specific question, ZC to answer general question and zc to answer booking-related questions.
+   
+    Also in this workflow there is a temporary check if user asked for summary, it requires exact phrase in the message "get summary" and outputs questions that were not answered by the AI.
+
+- 1.0 Langchain/zc answer non-booking workflow
+   
+   Workflow that answers using LangChain or ZC depending on whether extra info is needed. If LangChain is used the request to the send_message_to_ai endpoint is made, otherwise non-booking zc used. 
+
+- 1.1 ZC booking workflow
+
+   ZC booking workflow, the only difference with zc non-booking is the prompt, so probably it might be merged with non-booking zc later on.
+
+- 3.2 Robot reply - copy.
+
+   Workflow that sends ZC answer to user.
+
+- 4.0 Send LangChain answer
+
+   Workflow that sends LangChain answer to user and is triggered within this API in the send_message_to_ai endpoint.
+
+## Zapier 
+
+Zaps on Zapier are used in webhooks in 0.0 Get user message workflow, their main goal is to navigate the flow. This webhooks are requests to ChatGPT within Zapier, for more informaion check zaps on Zapier.
