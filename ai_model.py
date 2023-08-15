@@ -195,8 +195,8 @@ class Model():
         class SearchInput(BaseModel):
             query: str = Field(description="should be an address in similar to this format 18070 Langlois Rd SPACE 212, Desert Hot Springs, CA 92241")
 
-        search_tool = Tool(
-            name="Search Tool",
+        get_house_details_tool = Tool(
+            name="Get House Details Tool",
             func=get_house_property,
             description="useful when need to search for info about house, but not about places near it.  The input to this tool should be an address of the house",
             args_schema = SearchInput
@@ -214,10 +214,10 @@ class Model():
             description = "useful when need to search for info about other houses that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house"
         )
 
-        get_tax_info = Tool(
-            name = "Get tax info",
+        get_tax_or_price_info = Tool(
+            name = "Get tax or price info",
             func = get_tax_informatiom,
-            description = "useful when need to search about tax or price info about house.  The input to this tool should be an address of the house"
+            description = "useful when need to search about tax or price history, reductions info about house.  The input to this tool should be an address of the house"
         )
         
         google_places = Tool(
@@ -231,7 +231,7 @@ class Model():
         
 
         
-        tools = [search_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_info]
+        tools = [get_house_details_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_or_price_info]
 
         self.memory = ConversationBufferMemory(memory_key="chat_history")
         llm = ChatOpenAI(temperature=0.0,openai_api_key="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",max_tokens=512,model="gpt-3.5-turbo-16k")
@@ -241,7 +241,7 @@ class Model():
             return though
 
         self.agent_chain = initialize_agent(tools,llm,memory=self.memory,agent="chat-zero-shot-react-description",
-                                            verbose=True,early_stopping_method="generate",max_iterations=5, handle_parsing_errors=_handle_error,
+                                            verbose=True,early_stopping_method="generate",max_iterations=4, handle_parsing_errors=_handle_error,
                                             agent_kwargs={
         'system_message_prefix':"Answer to the question as best and comprehensively as possible, give a complete answer to the question. Inlude all important information in your Final Answer. You have access to the following tools:",
     })  
@@ -289,6 +289,7 @@ class Model():
         previous_human_messages, previous_ai_messages = self.add_memory(user_messages, ai_messages)
         #remove first AI and user message if it doesn't fit into memory
         self.clip_context()
+        print("User question: ",user_input)
         ai_response = self.agent_chain.run(user_input)
         print('Langchain answer ', ai_response)
         return self.enhance_ai_response(user_input,ai_response,previous_human_messages, previous_ai_messages)
@@ -340,4 +341,21 @@ AI: Current price of this house is 100 as mentione on Zillow. Let me know if the
         while self.get_content_length() > self.max_length:
             self.memory.chat_memory.messages.pop(0)
             self.memory.chat_memory.messages.pop(0)
-        
+
+
+    def get_summary_of_conversation(self,conversation):
+        llm = ChatOpenAI(temperature=0.0,model="gpt-3.5-turbo-16k")
+        prefix = """Here is client communication with ai, please give question on which AI was not able to answer, usually when AI is unable to answer it usually has "I am sorry", "I apologize" etc. in response."""
+        sufix = """As output please provide only questions on which AI didn't give repsonse during conversation. Do not provide questions that were answered in other messages.
+Provide output in format
+User question on which AI didn't answer: 
+1. question
+2. question
+"""
+        conversation = conversation[:self.max_tokens]
+        prompt = f'{prefix} \n {conversation} \n {sufix}'
+        messages =[
+            HumanMessage(content = prompt)
+        ]
+        summary = llm(messages).content
+        return summary

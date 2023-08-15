@@ -34,6 +34,18 @@ async def send_message_to_ai(request:Request):
     return {'bot_response' : ai_response}
 
 
+@app.post('/get_summary')
+async def get_summary(request:Request):
+    chatmodel = Model()
+    res = await request.json()
+    email = res.get('email')
+    phone = res.get('phone')
+    message_history = res['customData']['message_history']
+    summary = chatmodel.get_summary_of_conversation(message_history)
+    summary = f"SUMMARY: {summary}"
+    requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'bot_response' : summary, 'phone':phone,'email':email})
+    
+
 
 ## Send to GHL's GPT
 # def clip_history(message_history,prompt):
