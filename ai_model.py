@@ -78,7 +78,7 @@ def __get_info_about_home_from_zillow(location:str):
     base_url = "https://zillow-com1.p.rapidapi.com/property"
     
     headers = {
-	"X-RapidAPI-Key": "40953cc5afmsh9d09a374a48d7f2p115b37jsnca69ccb7de17",
+	"X-RapidAPI-Key": os.getenv('X-RapidAPI-Key '),
 	"X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
     }
 
