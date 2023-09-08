@@ -16,18 +16,24 @@ app = FastAPI()
 
 @app.post('/send_message_to_ai')
 async def send_message_to_ai(request:Request):
-    chatmodel = Model()
 
     res = await request.json()
+    platform = res['customData']['platform']
     user_message = res['customData']['message']
     if '[' in user_message:
-        user_message = user_message.split('[')
+        user_message = user_message.split('[')[0]
     address = res['customData']['address']
     message_history = res['customData']['message_history']
+    multiple = res['customData']['multiple']
+    if multiple == 'True':
+        print("ANSWER ON MULTIPLE")
+        # return 0 
     email = res.get('email')
     phone = res.get('phone')
+
+    chatmodel = Model(message_history,source=platform)
     
-    user_query = f'{user_message} +  I am interested in {address}'
+    user_query = f'{user_message} +  I am interested in {address}' #+ " If question is related to nearby places please provide distance to them as well."
     ai_response = chatmodel.response(user_query,message_history)
     ## make post request on GHL's inbound webhook
     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'bot_response' : ai_response, 'phone':phone,'email':email})
