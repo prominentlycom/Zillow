@@ -13,14 +13,13 @@ from langchain.memory import ConversationBufferMemory
 from langchain.tools import GooglePlacesTool
 from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 from datetime import datetime
-import langchain
 
 # Load .env file
 load_dotenv()
 
 # Read an environment variable
 os.environ["GPLACES_API_KEY"] =  os.getenv('GPLACES_API_KEY')
-
+os.environ["OPENAI_API_KEY"] =  os.getenv('OPENAI_API_KEY')
 
 def convert_timestamp_to_date(timestamp):
     # Convert milliseconds to seconds by dividing by 1000
@@ -33,52 +32,6 @@ def convert_timestamp_to_date(timestamp):
     formatted_date = datetime_obj.strftime('%Y-%m-%d %H:%M:%S')
     return formatted_date
 
-def find_id(location : str):
-    """function to retrieve id of the house on realtor.com by address"""
-    url = "https://realtor-com4.p.rapidapi.com/auto-complete"
-
-    querystring = {"input":location}
-
-    headers = {
-        "X-RapidAPI-Key": "40953cc5afmsh9d09a374a48d7f2p115b37jsnca69ccb7de17",
-        "X-RapidAPI-Host": "realtor-com4.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    id = response.json()['autocomplete'][0]['mpr_id']
-    return id
-
-def get_house_details(location:str):
-
-    property_id = find_id(location)
-    url = "https://realtor-com4.p.rapidapi.com/properties/detail"
-
-    querystring = {"property_id":property_id}
-
-    headers = {
-        "X-RapidAPI-Key": "40953cc5afmsh9d09a374a48d7f2p115b37jsnca69ccb7de17",
-        "X-RapidAPI-Host": "realtor-com4.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json().get('data',None)
-    if data == None:
-        return None
-    data = data.get('home',None)
-    data.pop('photos')
-    data.pop('home_tours')
-    data.pop('primary_photo')
-    data.pop('advertisers')
-    data.pop('source')
-    data.pop('lead_attributes')
-    data.pop('tax_history')
-    data.pop('other_listings')
-    data.pop('property_history')
-    data.pop('virtual_tours')
-    data.pop('consumer_advertisers')
-    data.pop('estimates')
-    
-    return data
 
 def find_zpid(
     location: Optional[str] = None, 
@@ -125,7 +78,7 @@ def __get_info_about_home_from_zillow(location:str):
     base_url = "https://zillow-com1.p.rapidapi.com/property"
     
     headers = {
-	"X-RapidAPI-Key": "40953cc5afmsh9d09a374a48d7f2p115b37jsnca69ccb7de17",
+	"X-RapidAPI-Key": os.getenv('X-RapidAPI-Key '),
 	"X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
     }
 
@@ -149,21 +102,30 @@ def get_house_property(
 
 def find_distance(addresses:str) -> str:
     '''Find distance tool, useful when need to find distance between two exact addresses'''
-    try:
-        splitted_addresses = addresses.split('|')
-        gmaps = googlemaps.Client(key = os.getenv('GPLACES_API_KEY'))
+    splitted_addresses = addresses.split('|')
+    gmaps = googlemaps.Client(key = os.getenv('GPLACES_API_KEY'))
+    
+    if len(splitted_addresses) == 2:
+        address1, address2 =  splitted_addresses[0],splitted_addresses[1]
+        address_regex = '\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}'
+        match = re.search(address_regex, address2)
+        if not match:
+            address2 = GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=1)).run(f'{address2} near {address1}').split('Address:')[1].split('\n')[0]
+        data = gmaps.distance_matrix(address1,address2)
+        my_dist =data['rows'][0]['elements'][0]
+        if my_dist['status'] == 'NOT_FOUND':
+            return "Sorry, couldn't find the distance"
         
-        if len(splitted_addresses) == 2:
-            address1, address2 =  splitted_addresses[0],splitted_addresses[1]
-            # address_regex = '\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}'
-            # match = re.search(address_regex, address2)
-            
-            address2 = address2.strip()  # Remove leading/trailing spaces
-            if address2 == "":
-                return "There is no name or address to the second location, please include one"
-            
-            if not (address2[0].isdigit() and address2[-1].isdigit()):
-                address2 = GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=1)).run(f'{address2} near {address1}').split('Address:')[0]
+        distance_km = my_dist['distance']['text']
+        if distance_km == "1 m":
+            distance_km = 'less than 200 m'
+        duration = my_dist['duration']['text']
+        return f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}"
+    elif len(splitted_addresses) > 2:
+        answer = ''
+        address1 = splitted_addresses[0]
+        for i in range(1,len(splitted_addresses)):
+            address2 = splitted_addresses[i]
             data = gmaps.distance_matrix(address1,address2)
             my_dist =data['rows'][0]['elements'][0]
             if my_dist['status'] == 'NOT_FOUND':
@@ -173,25 +135,8 @@ def find_distance(addresses:str) -> str:
             if distance_km == "1 m":
                 distance_km = 'less than 200 m'
             duration = my_dist['duration']['text']
-            return f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}"
-        elif len(splitted_addresses) > 2:
-            answer = ''
-            address1 = splitted_addresses[0]
-            for i in range(1,len(splitted_addresses)):
-                address2 = splitted_addresses[i]
-                data = gmaps.distance_matrix(address1,address2)
-                my_dist =data['rows'][0]['elements'][0]
-                if my_dist['status'] == 'NOT_FOUND':
-                    return "Sorry, couldn't find the distance"
-                
-                distance_km = my_dist['distance']['text']
-                if distance_km == "1 m":
-                    distance_km = 'less than 200 m'
-                duration = my_dist['duration']['text']
-                answer += f"Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}\n"
-            return f"Include this information while answering \n{answer}"
-    except:
-        return "Can't find distance"
+            answer += f"Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}\n"
+        return f"Include this information while answering \n{answer}"
     
 def google_places_wrapper(query:str) -> str:
     """ A wrapper around Google Places. 
@@ -244,16 +189,37 @@ def get_tax_informatiom(location:str) -> dict:
     return post_processed
     
 class Model():
-    def __init__(self,message_history,source = 'Zillow'):
+    def __init__(self):
         self.max_length = 16_000
+        
+        class SearchInput(BaseModel):
+            query: str = Field(description="should be an address in similar to this format 18070 Langlois Rd SPACE 212, Desert Hot Springs, CA 92241")
 
-      
+        get_house_details_tool = Tool(
+            name="Get House Details Tool",
+            func=get_house_property,
+            description="useful when need to search for info about house, but not about places near it.  The input to this tool should be an address of the house",
+            args_schema = SearchInput
+        )
+
         find_distance_tool = Tool(
             name="Find distance tool",
             func=find_distance,
             description="useful when need to find distance between two addresses or how close two addresses are. You may use google_places tool to find address. The input to this tool should be a | separated list of addresses of length two, representing the two addresses you want to find distance between. For example, `13545 Cielo Azul Way, Desert Hot Springs, CA 92240|12105 Palm Dr, Desert Hot Springs, CA 92240` would be the input if you wanted to find distance between 13545 Cielo Azul Way, Desert Hot Springs, CA 92240 and 12105 Palm Dr, Desert Hot Springs, CA 92240.",
         )
-            
+
+        find_nearby_homes = Tool(
+            name = "Find nearby homes",
+            func = get_info_about_nearby_homes,
+            description = "useful when need to search for info about other houses that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house"
+        )
+
+        get_tax_or_price_info = Tool(
+            name = "Get tax or price info",
+            func = get_tax_informatiom,
+            description = "useful when need to search about tax or price history, reductions info about house.  The input to this tool should be an address of the house"
+        )
+        
         google_places = Tool(
             name = 'google_places',
             func = google_places_wrapper,
@@ -264,58 +230,23 @@ class Model():
         )
         
 
-        if source == 'Zillow':
-                    
-            class SearchInput(BaseModel):
-                query: str = Field(description="should be an address in similar to this format 18070 Langlois Rd SPACE 212, Desert Hot Springs, CA 92241")
+        
+        tools = [get_house_details_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_or_price_info]
 
-            get_house_details_tool = Tool(
-                name="Get House Details Tool",
-                func=get_house_property,
-                description="useful when need to search for info about house, but not about places near it.  The input to this tool should be an address of the house",
-                args_schema = SearchInput
-            )
-
-            find_nearby_homes = Tool(
-                name = "Find nearby homes",
-                func = get_info_about_nearby_homes,
-                description = "useful when need to search for info about other houses that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house"
-            )
-
-            get_tax_or_price_info = Tool(
-                name = "Get tax or price info",
-                func = get_tax_informatiom,
-                description = "useful when need to search about tax or price info, reductions info about house.  The input to this tool should be an address of the house"
-            )
-            tools = [get_house_details_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_or_price_info]
-        else:
-            get_house_details_tool = Tool(
-                name = "Get House Details Tool",
-                func = get_house_details,
-                description = "useful when need to search for info about house, but not about places near it.  The input to this tool should be an address of the house"
-            )
-
-            tools = [google_places,find_distance_tool,get_house_details_tool]
-            
         self.memory = ConversationBufferMemory(memory_key="chat_history")
-        llm = ChatOpenAI(temperature=0.0,max_tokens=512,model="gpt-4")
+        llm = ChatOpenAI(temperature=0.0,max_tokens=512,model="gpt-3.5-turbo-16k")
 
         def _handle_error(error) -> str:
             _,though = str(error).split("Could not parse LLM output:")
             return though
-        user_messages, ai_messages = self.split_messages(message_history)
-        previous_human_messages, previous_ai_messages = self.add_memory(user_messages, ai_messages)
-        self.previous_human_messages, self.previous_ai_messages = previous_human_messages, previous_ai_messages
-        previous_conv = "Here is message history, you may use it : "
-        for i in range(len(previous_human_messages)):
-            previous_conv += f"User: {previous_human_messages[i]} AI : {previous_ai_messages[i] }" 
-        self.agent_chain = initialize_agent(tools,llm,max_execution_time=180,memory=self.memory,agent="zero-shot-react-description",
-                                            verbose=True,early_stopping_method="generate",max_iterations=7, handle_parsing_errors=_handle_error,
+
+        self.agent_chain = initialize_agent(tools,llm,memory=self.memory,agent="chat-zero-shot-react-description",
+                                            verbose=True,early_stopping_method="generate",max_iterations=4, handle_parsing_errors=_handle_error,
                                             agent_kwargs={
-        'system_message_prefix':f"Answer to the question as best and comprehensively as possible, give a complete answer to the question. If user asks about location near property please provide distance to it as well. Inlude all important information in your Final Answer. Do not mention address of the property. {previous_conv}. You have access to the following tools:",
+        'system_message_prefix':"Answer to the question as best and comprehensively as possible, give a complete answer to the question. Inlude all important information in your Final Answer. You have access to the following tools:",
     })  
         # self.agent_chain.agent.llm_chain.prompt.messages[0].prompt.template = self.agent_chain.agent.llm_chain.prompt.messages[0].prompt.template.replace('Thought: I now know the final answer','Thought:  I have gathered detailed information to answer the question')
-        # print("Prompt ", self.agent_chain.agent.llm_chain.prompt.messages)
+        print("Prompt ", self.agent_chain.agent.llm_chain.prompt.messages)
 
     def split_messages(self,text):
         """Function to split chat history and return them as two separete lists. Last user message is skipped."""
@@ -355,46 +286,42 @@ class Model():
     def response(self,user_input,message_history):
         """Repsond on user's message"""
         user_messages, ai_messages = self.split_messages(message_history)
-        print('Memory ', self.memory.chat_memory)
-        
+        previous_human_messages, previous_ai_messages = self.add_memory(user_messages, ai_messages)
         #remove first AI and user message if it doesn't fit into memory
         self.clip_context()
         print("User question: ",user_input)
-        try:
-            ai_response = self.agent_chain.run(user_input)
-        except langchain.schema.output_parser.OutputParserException as e:
-            _,ai_response = str(e).split("Could not parse LLM output:")
+        ai_response = self.agent_chain.run(user_input)
         print('Langchain answer ', ai_response)
-        return self.enhance_ai_response(user_input,ai_response,self.previous_human_messages, self.previous_ai_messages)
+        return self.enhance_ai_response(user_input,ai_response,previous_human_messages, previous_ai_messages)
 
     def enhance_ai_response(self,user_input,rough_ai_response,previous_human_messages, previous_ai_messages):
-        """Additional ChatGPT request to enhance AI response"""
-        llm = ChatOpenAI(temperature=0.0,max_tokens=2000,model="gpt-3.5-turbo")
-        messages = [
-                    SystemMessage(
-                        content=f"""You are friendly, helpful and supportive real estate agent named Rick, please answer concisely on last client's message. Make your answer as relevant as possible.
-Follow this rules while answering:
-- Do not sound repetative or too much like a servant.
-- Do not mention address in the response, instead use words like "The house", "property", etc. 
-- Do not include property address in response.
-- Also do not answer with templates where importaint information is in [] without actual information'.
-- If the user message is something like "I am interested in [address]" just ask what could you help him with.
-- Do not include information with clipped data
-- Only answer on question and ask whether user is interested in something else.
-- Do not mention any tools that were used to get information
-Below is the information that you might need to answer the question you may modify it, but keep the meaning:
-{rough_ai_response}
-"""
-                    )
-                ]
-        # for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
-        #     messages.append(HumanMessage(content=human_message))
-        #     messages.append(AIMessage(content=ai_message))
-        human_message = "Please do not include location of the property in response, but include the name or address of stores, hospitals, and other locations that are not the property.\n  Do not add greeting message or thank you \n Also you are not allowed to answer using templates like [number of] or something similar where the information in brackets [] is not filled.\n" + "User question: " + user_input
-        messages.append(HumanMessage(content=human_message))
-        refined_response = llm(messages).content
-        print("enhanced response ", refined_response)
-        return refined_response
+            """Additional ChatGPT request to enhance AI response"""
+            llm = ChatOpenAI(temperature=0.0,max_tokens=2000,model="gpt-3.5-turbo")
+            messages = [
+                        SystemMessage(
+                            content=f"""You are friendly, helpful and supportive real estate agent named Rick, please answer concisely on last client's message. Make your answer as relevant as possible.
+    Follow this rules while answering:
+    - Do not sound repetative or too much like a servant.
+    - Do not mention address in the response, instead use words like "The house", "property", etc. 
+    - Do not include property address in response.
+    - Also do not answer with templates where importaint information is in [] without actual information'.
+    - If the user message is something like "I am interested in [address]" just ask what could you help him with.
+    - Do not include information with clipped data
+    - Only answer on question and ask whether user is interested in something else.
+    - Do not mention any tools that were used to get information
+    Below is the information that you might need to answer the question you may modify it, but keep the meaning:
+    {rough_ai_response}
+    """
+                        )
+                    ]
+            # for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
+            #     messages.append(HumanMessage(content=human_message))
+            #     messages.append(AIMessage(content=ai_message))
+            human_message = "Please do not include location of the property in response, but include the name or address of stores, hospitals, and other locations that are not the property.\n  Do not add greeting message or thank you \n Also you are not allowed to answer using templates like [number of] or something similar where the information in brackets [] is not filled.\n" + "User question: " + user_input
+            messages.append(HumanMessage(content=human_message))
+            refined_response = llm(messages).content
+            print("enhanced response ", refined_response)
+            return refined_response
 
     def get_content_length(self):
         total_length = 0
