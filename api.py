@@ -24,10 +24,6 @@ async def send_message_to_ai(request:Request):
         user_message = user_message.split('[')[0]
     address = res['customData']['address']
     message_history = res['customData']['message_history']
-    multiple = res['customData']['multiple']
-    if multiple == 'True':
-        print("ANSWER ON MULTIPLE")
-        # return 0 
     email = res.get('email')
     phone = res.get('phone')
 

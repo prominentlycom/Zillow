@@ -48,7 +48,8 @@ The following API endpoints are available for interacting with the integrated ch
      "customData":{
         "message":"User_message",
         "address":"address of the house regarding which the question is asked",
-        "message_history":"message history in following format You: user_message AI:ai_message You: user_message AI: ai_message"
+        "message_history":"message history in following format You: user_message AI:ai_message You: user_message AI: ai_message",
+        "platform":"Zillow", #platform from which user came, if passed Zillow, zillow listings are used, else realtor.com
      }
      ...
    }
