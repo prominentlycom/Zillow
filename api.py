@@ -1,7 +1,3 @@
-import asyncio
-import datetime
-
-import aiohttp
 import requests
 import os
 from dotenv import load_dotenv
@@ -13,117 +9,43 @@ from ai_model import Model
 load_dotenv()
 
 # Read an environment variable
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-os.environ["GPLACES_API_KEY"] = os.getenv("GPLACES_API_KEY")
+os.environ["OPENAI_API_KEY"] =  os.getenv('OPENAI_API_KEY')
+os.environ["GPLACES_API_KEY"] =  os.getenv('GPLACES_API_KEY')
 
 app = FastAPI()
 
-current_request_task = None
-
-
-@app.post("/send_message_to_ai")
-async def send_message_to_ai(request: Request):
+@app.post('/send_message_to_ai')
+async def send_message_to_ai(request:Request):
     chatmodel = Model()
 
-    global current_request_task
-    if current_request_task and not current_request_task.done():
-        current_request_task.cancel()
-
-    try:
-        res = await request.json()
-        print("RESULT_JSON: ", res)
-        user_message = res["customData"]["message"]
-        if "[" in user_message:
-            user_message = user_message.split("[")
-        address = res["customData"]["address"]
-        message_history = res["customData"]["message_history"]
-        email = res.get("email")
-        phone = res.get("phone")
-
-        user_query = f"{user_message} +  I am interested in {address}"
-
-        current_request_task = asyncio.create_task(
-            chatmodel.response(user_query, message_history)
-        )
-
-        ai_response = await current_request_task
-
-        print("BOT_RESPONSE:", ai_response)
-
-        async with aiohttp.ClientSession() as session:
-            webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
-            payload = {"bot_response": ai_response, "phone": phone, "email": email}
-            async with session.post(webhook_url, json=payload, ssl=False) as response:
-                pass
-
-        return {"bot_response": ai_response}
-
-    except asyncio.CancelledError:
-        pass
-
-    finally:
-        current_request_task = None
+    res = await request.json()
+    user_message = res['customData']['message']
+    if '[' in user_message:
+        user_message = user_message.split('[')
+    address = res['customData']['address']
+    message_history = res['customData']['message_history']
+    email = res.get('email')
+    phone = res.get('phone')
+    
+    user_query = f'{user_message} +  I am interested in {address}'
+    ai_response = chatmodel.response(user_query,message_history)
+    ## make post request on GHL's inbound webhook
+    requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'bot_response' : ai_response, 'phone':phone,'email':email})
+    return {'bot_response' : ai_response}
 
 
-@app.post("/get_summary")
-async def get_summary(request: Request):
+@app.post('/get_summary')
+async def get_summary(request:Request):
     chatmodel = Model()
     res = await request.json()
-
-    email = res.get("email")
-    phone = res.get("phone")
-    message_history = res["customData"]["message_history"]
+    email = res.get('email')
+    phone = res.get('phone')
+    message_history = res['customData']['message_history']
     summary = chatmodel.get_summary_of_conversation(message_history)
-    # summary = f"{summary}"
-    print(summary)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
-        payload = {"summary": summary, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    summary = f"SUMMARY: {summary}"
+    requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'bot_response' : summary, 'phone':phone,'email':email})
+    
 
-    return {"summary": summary}
-
-
-LOG_FILE = "logfile.txt"
-
-
-@app.post("/test_webhook")
-async def test_webhook(request: Request):
-    try:
-        res = await request.json()
-        location = res["location"]
-        print("WEBHOOK_RES", res)
-        message = res["customData"]["message"]
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        log_message = (
-            f"{timestamp} - Location: {location} - Message History: {message}\n"
-        )
-
-        with open(LOG_FILE, "a") as file:
-            file.write(log_message)
-
-        print(timestamp, location, message)
-
-        return {"status": "success"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-# @app.post("/summary_counter")
-# async def summary_counter(request: Request):
-#     res = await request.json()
-#     counter = res.get("summary_check")
-#     counter += 1
-#     res["summary_check"] = counter
-
-
-# async with aiohttp.ClientSession() as session:
-#     webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
-#     payload = {'bot_response': ai_response, 'phone': phone, 'email': email}
-#     async with session.post(webhook_url, json=payload, ssl=False) as response:
-#         pass
 
 ## Send to GHL's GPT
 # def clip_history(message_history,prompt):
@@ -138,7 +60,7 @@ async def test_webhook(request: Request):
 # @app.post('/clip_message_history')
 # async def clip_message_history(request:Request):
 #     res = await request.json()
-
+    
 #     message_history = res['customData']['message_history']
 #     prompt = res['customData']['openai_prompt']
 #     print("PROMPT IS",prompt)
@@ -147,7 +69,7 @@ async def test_webhook(request: Request):
 #     message_history = clip_history(message_history,prompt)
 #     print('Clipped message : ',message_history)
 #     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/94a02662-1c53-4f5b-8573-a9f412c8d568',json={'prompt':prompt,'message_history' : message_history, 'phone':phone,'email':email})
-# return {'message_history' : message_history}
+    # return {'message_history' : message_history}
 
 ## was used with custom webhook
 # basic_prompt = '''If the question is related to specific property information or utilities near that property, please answer yes, otherwise say no. Do not add anything else.
@@ -204,16 +126,16 @@ async def test_webhook(request: Request):
 #                 {"role": "user", "content": prompt}]
 #             )
 #     answer = result['choices'][0]['message']['content']
-
+    
 #     if 'yes' in answer.lower():
 #         print('need to ask extra info')
 #         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/08119398-afc3-4d05-9e75-899388717c2b', json = {'message':user_message,'need_extra_info':'True', 'email':email,'phone':phone})
-
+        
 #         return {'need_extra_info':'True'}
 #     else:
 #         print('No need to ask extra info')
 #         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/08119398-afc3-4d05-9e75-899388717c2b', json = {'message':user_message,'need_extra_info':'False', 'email':email,'phone':phone})
-
+        
 #         return {'need_extra_info':'False'}
 
 ## was used with custom webhook
@@ -229,11 +151,11 @@ async def test_webhook(request: Request):
 #     phone = res['phone']
 #     print(f'USER MESSAGE {user_message}')
 #     match = re.search(address_regex, user_message)
-
+    
 #     if match:
 #         print('Address found  ',{'address':match.group()})
 #         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/ddfd4671-13a1-4c55-b370-b7c5fc77dbfe', json = {'message':user_message,'address':match.group(), 'email':email,'phone':phone})
-
+        
 #         return {'address':match.group(), 'status':200}
 #     else:
 #         print('Address not found  ',user_message)
