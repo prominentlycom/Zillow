@@ -51,7 +51,8 @@ async def send_message_to_ai(request: Request):
         print("BOT_RESPONSE:", ai_response)
 
         async with aiohttp.ClientSession() as session:
-            webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
+            # webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
+            webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
             payload = {"bot_response": ai_response, "phone": phone, "email": email}
             async with session.post(webhook_url, json=payload, ssl=False) as response:
                 pass
@@ -77,7 +78,8 @@ async def get_summary(request: Request):
     # summary = f"{summary}"
     print(summary)
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
+        # webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"summary": summary, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload, ssl=False) as response:
             pass

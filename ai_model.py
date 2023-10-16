@@ -1,3 +1,6 @@
+import json
+
+import openai
 from pydantic import BaseModel, Field
 import requests
 import re
@@ -18,7 +21,40 @@ load_dotenv()
 
 # Read an environment variable
 os.environ["GPLACES_API_KEY"] = os.getenv("GPLACES_API_KEY")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
+functions = [
+    {
+        "name": "search_params",
+        "description": "Please show the location and other parameters",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "Location"
+                },
+                "bedsMax": {
+                    "type": "number",
+                    "description": "Requirement number of bedrooms"
+                },
+                "priceMin": {
+                    "type": "number",
+                    "description": "Preferred house price"
+                },
+                "sqftMax": {
+                    "type": "number",
+                    "description": "Preferred Square Feet value."
+                },
+                "buildYearMax": {
+                    "type": "number",
+                    "description": "Preferred Year Built value"
+                }
+            }
+        }
+    },
+]
 
 def convert_timestamp_to_date(timestamp):
     # Convert milliseconds to seconds by dividing by 1000
@@ -45,12 +81,13 @@ def find_zpid(
     }
 
     querystring = {"page": "1"}
-
+    print("LOCATION: ", location)
     if location is not None:
         querystring["location"] = location
 
-    # print(f'Search with {querystring}')
+    print(f'Search with {querystring}')
     result = requests.get(base_url, params=querystring, headers=headers)
+    # print("FIND_ZPID_RESULT: ", result.json())
     try:
         if isinstance(result.json(), list):
             return result.json()[0]["zpid"]
@@ -89,6 +126,7 @@ def __get_info_about_home_from_zillow(location: str):
         raise Exception("Didn't get zpid")
 
     result = requests.get(base_url, params=querystring, headers=headers)
+    print("RESULT_HOME: ", result.json())
     return result
 
 
@@ -97,6 +135,8 @@ def get_house_property(
 ) -> dict:
     """Tool that uses Zillow api to get house properties given adress of the house.Use case answer on questions related to the house. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
+    if isinstance(result, str):
+        return result
     post_processed = post_process_house_property(result.json())
     return post_processed
 
@@ -159,8 +199,14 @@ def google_places_wrapper(query: str) -> str:
 def get_info_about_nearby_homes(location: str) -> str:
     """Tool that uses Zillow api to search for nearby properties given adress of the house. Use case answer on questions related to the properties nearby. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
+    if isinstance(result, str):
+        return result
     post_processed = result.json()["nearbyHomes"]
-    return post_processed
+    on_sale_property = []
+    for property in post_processed:
+        if property["homeStatus"] == "FOR_SALE":
+            on_sale_property.append(property)
+    return on_sale_property
 
 
 def remove_data_about_dates_before_date(
@@ -175,6 +221,8 @@ def remove_data_about_dates_before_date(
 def get_tax_informatiom(location: str) -> dict:
     """Tool that uses Zillow api to search for house price, taxHistory and price history the house. Use case answer on questions related to the house price, tax. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
+    if isinstance(result, str):
+        return result
     post_processed = result.json()["taxHistory"]
 
     # remove data, when the date was before this
@@ -206,6 +254,38 @@ def get_tax_informatiom(location: str) -> dict:
     return post_processed
 
 
+def search_properties_without_address(user_input: str):
+    """Search properties without address tool, useful when need to search properties without specific address"""
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo-0613",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are useful assistant"
+            },
+            {
+                "role": "user",
+                "content": f"Here is user input: {user_input}. Please return location and other parameters."
+            }
+        ],
+        functions=functions,
+        function_call={
+            "name": "search_params"
+        },
+    )
+    arguments = response["choices"][0]["message"]["function_call"]["arguments"]
+    querystring = json.loads(arguments)
+    base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
+
+    headers = {
+        "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
+        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
+    }
+    result = requests.get(base_url, params=querystring, headers=headers)
+    result = result.json()
+    result = result["props"][:10]
+    return f"This is a search result{result}. Show only base info for each house. Do not show links in response."
+
 class Model:
     def __init__(self):
         self.max_length = 16_000
@@ -222,6 +302,12 @@ class Model:
             args_schema=SearchInput,
         )
 
+        find_properties_without_address_tool = Tool(
+            name="Find properties without address",
+            func=search_properties_without_address,
+            description="useful when need to find properties and don't have a full address. The input to this tool shoul be user message+address",
+        )
+
         find_distance_tool = Tool(
             name="Find distance tool",
             func=find_distance,
@@ -231,7 +317,7 @@ class Model:
         find_nearby_homes = Tool(
             name="Find nearby homes",
             func=get_info_about_nearby_homes,
-            description="useful when need to search for info about other houses that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house",
+            description="useful when need to search for info about other houses with status On Sale, that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house",
         )
 
         get_tax_or_price_info = Tool(
@@ -251,6 +337,7 @@ class Model:
 
         tools = [
             get_house_details_tool,
+            find_properties_without_address_tool,
             google_places,
             find_distance_tool,
             find_nearby_homes,
@@ -414,6 +501,4 @@ DON'T BE REPETITIVE!
         print("PROMPT: ", prompt)
         messages = [HumanMessage(content=prompt)]
         summary = llm(messages).content
-        # print("SUMMARY_1: ", summary)
-        # print(type(summary))
         return summary
