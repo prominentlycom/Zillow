@@ -148,7 +148,7 @@ async def test_webhook(request: Request):
 #     phone = res.get('phone')
 #     message_history = clip_history(message_history,prompt)
 #     print('Clipped message : ',message_history)
-#     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/94a02662-1c53-4f5b-8573-a9f412c8d568',json={'prompt':prompt,'message_history' : message_history, 'phone':phone,'email':email})
+#     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'prompt':prompt,'message_history' : message_history, 'phone':phone,'email':email})
 # return {'message_history' : message_history}
 
 ## was used with custom webhook
@@ -209,12 +209,12 @@ async def test_webhook(request: Request):
 
 #     if 'yes' in answer.lower():
 #         print('need to ask extra info')
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/08119398-afc3-4d05-9e75-899388717c2b', json = {'message':user_message,'need_extra_info':'True', 'email':email,'phone':phone})
+#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'need_extra_info':'True', 'email':email,'phone':phone})
 
 #         return {'need_extra_info':'True'}
 #     else:
 #         print('No need to ask extra info')
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/08119398-afc3-4d05-9e75-899388717c2b', json = {'message':user_message,'need_extra_info':'False', 'email':email,'phone':phone})
+#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'need_extra_info':'False', 'email':email,'phone':phone})
 
 #         return {'need_extra_info':'False'}
 
@@ -234,10 +234,10 @@ async def test_webhook(request: Request):
 
 #     if match:
 #         print('Address found  ',{'address':match.group()})
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/ddfd4671-13a1-4c55-b370-b7c5fc77dbfe', json = {'message':user_message,'address':match.group(), 'email':email,'phone':phone})
+#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'address':match.group(), 'email':email,'phone':phone})
 
 #         return {'address':match.group(), 'status':200}
 #     else:
 #         print('Address not found  ',user_message)
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/ddfd4671-13a1-4c55-b370-b7c5fc77dbfe', json = {'message':user_message,'address':'not found', 'email':email,'phone':phone})
+#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'address':'not found', 'email':email,'phone':phone})
 #         return {'address':'not found','status':200}
