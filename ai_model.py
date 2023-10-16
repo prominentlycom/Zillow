@@ -432,7 +432,7 @@ class Model:
         previous_ai_messages,
     ):
         """Additional ChatGPT request to enhance AI response"""
-        llm = ChatOpenAI(temperature=0.0, max_tokens=600, model="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.5, max_tokens=250, model="gpt-3.5-turbo")
         messages = [
             SystemMessage(
                 content=f"""You are friendly, helpful and supportive real estate agent named Rick, please answer concisely on last client's message.
