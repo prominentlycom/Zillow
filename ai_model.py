@@ -463,8 +463,10 @@ AI: The house has 3 bedrooms and 2 bathrooms. Let me know if there's anything el
         # for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
         #     messages.append(HumanMessage(content=human_message))
         #     messages.append(AIMessage(content=ai_message))
-        messages.append(HumanMessage(content=previous_human_messages[-1]))
-        messages.append(AIMessage(content=previous_ai_messages[-1]))
+        if previous_human_messages:
+            messages.append(HumanMessage(content=previous_human_messages[-1]))
+        if previous_ai_messages:
+            messages.append(AIMessage(content=previous_ai_messages[-1]))
         messages.append(HumanMessage(content=user_input))
         print("MESSAGES: ", messages)
         print("PREVIOUS_USER: ", previous_human_messages)

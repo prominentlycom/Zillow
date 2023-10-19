@@ -35,8 +35,8 @@ async def send_message_to_ai(request: Request):
         user_message = res["customData"]["message"]
         if "[" in user_message:
             user_message = user_message.split("[")
-        address = res["customData"]["address"]
-        message_history = res["customData"]["message_history"]
+        address = res["customData"].get("address", "")
+        message_history = res["customData"].get("message_history", "")
         email = res.get("email")
         phone = res.get("phone")
 
