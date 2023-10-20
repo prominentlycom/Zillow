@@ -416,10 +416,6 @@ class Model:
         self.clip_context()
         print("User question: ", user_input)
         ai_response = self.agent_chain.run(user_input)
-        print("Langchain answer ", ai_response)
-        print("SELF_MEMORY: ", self.memory)
-        print("PREVIOUS_USER: ", previous_human_messages)
-        print("PREVIOUS_AI: ", previous_ai_messages)
         return self.enhance_ai_response(
             user_input, ai_response, previous_human_messages, previous_ai_messages
         )
@@ -432,41 +428,21 @@ class Model:
         previous_ai_messages,
     ):
         """Additional ChatGPT request to enhance AI response"""
-        llm = ChatOpenAI(temperature=0.0, max_tokens=600, model="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.7, max_tokens=250, model="gpt-3.5-turbo")
         messages = [
             SystemMessage(
-                content=f"""You are friendly, helpful and supportive real estate agent named Rick, please answer concisely on last client's message.
-Follow this rules while answering:
-- Sound like real human
-- Do not sound repetative or too much like a servant.
-- Do not mention address in the response, instead use words like "The house", "property", etc. Do not mention the address.
-- Also do not answer with templates like 'The distance is [distance]'.
-- If the user message is something like "I am interested in [address]" just ask what could you help him with.
-- Do not include information with clipped data
-- Do not mention any tools that were used to get information
-- Sometimes, once every few messages at the end of your answer you can ask if client wants to book a tour or video call
-Below is the information that you might need to answer the question, use it only when it is related to the user question, you may modify it, but keep the meaning:
-{rough_ai_response}
-
-Examples :
-User: How far is the beach?
-AI: The beach is 200 km away from the house. Do you help with something else?
-
-User: What is the price of the house?
-AI: Current price of this house is 100 as mentione on Zillow. Let me know if there's anything else I can assist you with regarding this property.
-
-User: How many bedrooms and bathrooms?
-AI: The house has 3 bedrooms and 2 bathrooms. Let me know if there's anything else or if you'd like to book a tour or video call.
-"""
+                content=f""" You are a friendly, helpful, and supportive real estate agent named Rick, please answer concisely on the client's last message. You should sound like a real human. Do not mention the address in your response, instead use words like "The house", "property", etc. Do not mention the address. If the user's message is something like "I am interested in (address)" just ask what could you help him with. You must not mention the tools that were used to get information.
+                Below is the information that you might need to answer the question, use it only when it is related to the user question, you may modify it, but keep the meaning:
+                {rough_ai_response} """
             )
         ]
         # for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
         #     messages.append(HumanMessage(content=human_message))
         #     messages.append(AIMessage(content=ai_message))
-        if previous_human_messages:
-            messages.append(HumanMessage(content=previous_human_messages[-1]))
-        if previous_ai_messages:
-            messages.append(AIMessage(content=previous_ai_messages[-1]))
+        # if previous_human_messages:
+        #     messages.append(HumanMessage(content=previous_human_messages[-1]))
+        # if previous_ai_messages:
+        #     messages.append(AIMessage(content=previous_ai_messages[-1]))
         messages.append(HumanMessage(content=user_input))
         print("MESSAGES: ", messages)
         print("PREVIOUS_USER: ", previous_human_messages)
