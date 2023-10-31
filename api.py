@@ -2,12 +2,18 @@ import asyncio
 import datetime
 
 import aiohttp
-import requests
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from ai_model import Model
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import SystemMessage
 
+from ai_model import (Model,
+                      get_tax_informatiom,
+                      google_places_wrapper,
+                      get_info_about_nearby_homes,
+                      search_properties_without_address,
+                      get_house_property, find_distance)
 
 # Load .env file
 load_dotenv()
@@ -19,6 +25,7 @@ os.environ["GPLACES_API_KEY"] = os.getenv("GPLACES_API_KEY")
 app = FastAPI()
 
 current_request_task = None
+llm = ChatOpenAI(temperature=0.7, max_tokens=250, model="gpt-3.5-turbo")
 
 
 @app.post("/send_message_to_ai")
@@ -51,7 +58,6 @@ async def send_message_to_ai(request: Request):
         print("BOT_RESPONSE:", ai_response)
 
         async with aiohttp.ClientSession() as session:
-            # webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
             webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
             payload = {"bot_response": ai_response, "phone": phone, "email": email}
             async with session.post(webhook_url, json=payload, ssl=False) as response:
@@ -78,13 +84,153 @@ async def get_summary(request: Request):
     # summary = f"{summary}"
     print(summary)
     async with aiohttp.ClientSession() as session:
-        # webhook_url = "https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c"
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"summary": summary, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload, ssl=False) as response:
             pass
 
     return {"summary": summary}
+
+
+@app.post("/get_tax_or_price_info")
+async def get_tax_or_price_info(request: Request):
+    res = await request.json()
+    address = res["customData"].get("address", "")
+    res = get_tax_informatiom(address)
+    messages = [
+        SystemMessage(
+            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information about taxes: {res}. This property located at: {address}. Provide this info in readable format."
+        )
+    ]
+    result = llm(messages).content
+
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"get_tax_or_price_info": result}
+        async with session.post(webhook_url, json=payload, ssl=False) as response:
+            pass
+
+    return {"get_tax_or_price_info": result}
+
+
+@app.post("/google_places")
+async def google_places(request: Request):
+    res = await request.json()
+    address = res["customData"].get("address", "")
+    user_message = res["customData"]["message"]
+    user_query = f"{user_message} +  I am interested in {address}"
+    result = google_places_wrapper(user_query)
+
+    messages = [
+        SystemMessage(
+            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information from google about places: {result}. This property located at: {address}. Provide this info in readable and enhanced format."
+        )
+    ]
+    result = llm(messages).content
+
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"google_places": result}
+        async with session.post(webhook_url, json=payload, ssl=False) as response:
+            pass
+
+    return {"google_places": result}
+
+
+@app.post("/find_nearby_homes")
+async def find_nearby_homes(request: Request):
+    res = await request.json()
+    address = res["customData"].get("address", "")
+    result = get_info_about_nearby_homes(address)
+    messages = [
+        SystemMessage(
+            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about homes nearby {address}. Please provide this info in readable and enhanced format."
+        )
+    ]
+    result = llm(messages).content
+
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"find_nearby_homes": result}
+        async with session.post(webhook_url, json=payload, ssl=False) as response:
+            pass
+
+    return {"find_nearby_homes": result}
+
+
+@app.post("/find_properties_without_address_tool")
+async def find_properties_without_address_tool(request: Request):
+    res = await request.json()
+    address = res["customData"].get("address", "")
+    user_message = res["customData"]["message"]
+    user_query = f"{user_message} +  I am interested in {address}"
+    result = search_properties_without_address(user_query)
+    messages = [
+        SystemMessage(
+            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about homes. Please provide this info in readable and enhanced format."
+        )
+    ]
+    result = llm(messages).content
+
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"find_properties_without_address_tool": result}
+        async with session.post(webhook_url, json=payload, ssl=False) as response:
+            pass
+
+    return {"find_properties_without_address_tool": result}
+
+
+@app.post("/get_house_details_tool")
+async def get_house_details_tool(request: Request):
+    res = await request.json()
+    address = res["customData"].get("address", "")
+
+    result = get_house_property(address)
+    messages = [
+        SystemMessage(
+            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about property located at {address}. Please provide info about this property in readable format."
+
+        )
+    ]
+    result = llm(messages).content
+
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"get_house_details_tool": result}
+        async with session.post(webhook_url, json=payload, ssl=False) as response:
+            pass
+
+    return {"get_house_details_tool": result}
+
+
+@app.post("/find_distance_tool")
+async def find_distance_tool(request: Request):
+    res = await request.json()
+    address = res["customData"].get("address", "")
+    user_message = res["customData"]["message"]
+    user_query = f"{user_message} +  I am interested in {address}"
+    result_places = google_places_wrapper(user_query)
+    messages = [
+        SystemMessage(
+            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information from google about places: {result_places}. Please extract and provide only addresses of each place line by line"
+
+        )
+    ]
+    result = llm(messages).content
+    addresses = result.split("\n")
+    final_addresses = f"{address}"
+
+    for address in addresses:
+        final_addresses += f"|{address}"
+    final_result = find_distance(final_addresses)
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"find_distance_tool": result}
+        async with session.post(webhook_url, json=payload, ssl=False) as response:
+            pass
+
+    return {"find_distance_tool": final_result}
 
 
 LOG_FILE = "logfile.txt"
