@@ -137,9 +137,6 @@ def get_house_property(
     """Tool that uses Zillow api to get house properties given adress of the house.Use case answer on questions related to the house. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"get_house_property": result}
-        requests.post(webhook_url, json=payload)
         return result
     post_processed = post_process_house_property(result.json())
     return post_processed
@@ -431,9 +428,23 @@ class Model:
         self.clip_context()
         print("User question: ", user_input)
         ai_response = self.agent_chain.run(user_input)
+        # return ai_response
         return self.enhance_ai_response(
             user_input, ai_response, previous_human_messages, previous_ai_messages
         )
+
+    def history_add(self, message_history):
+        user_messages, ai_messages = self.split_messages(message_history)
+        previous_human_messages, previous_ai_messages = self.add_memory(
+            user_messages, ai_messages
+        )
+        self.clip_context()
+        messages = []
+        if previous_human_messages and previous_ai_messages:
+            for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
+                messages.append(HumanMessage(content=human_message))
+                messages.append(AIMessage(content=ai_message))
+        return messages
 
     def enhance_ai_response(
         self,
@@ -443,21 +454,21 @@ class Model:
         previous_ai_messages,
     ):
         """Additional ChatGPT request to enhance AI response"""
-        llm = ChatOpenAI(temperature=0.7, max_tokens=250, model="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.7, max_tokens=450, model="gpt-3.5-turbo")
         messages = [
             SystemMessage(
-                content=f""" You are a friendly, helpful, and supportive real estate agent named Rick, please answer concisely on the client's last message. You should sound like a real human. Do not mention the address in your response, instead use words like "The house", "property", etc. Do not mention the address. If the user's message is something like "I am interested in (address)" just ask what could you help him with. You must not mention the tools that were used to get information.
-                Below is the information that you might need to answer the question, use it only when it is related to the user question, you may modify it, but keep the meaning:
+                content=f""" You are a friendly, helpful, and supportive real estate agent named Rick. Provide the information below in enhanced format. You should sound like a real human. Do not mention the address in your response, instead use words like "The house", "property", etc. Do not mention the address. If the user's message is something like "I am interested in (address)" just ask what could you help him with. You must not mention the tools that were used to get information.
+                Below is the answer to the user question, use it only when it is related to the user question, you may modify it, but keep the meaning:
                 {rough_ai_response} """
             )
         ]
         # for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
         #     messages.append(HumanMessage(content=human_message))
         #     messages.append(AIMessage(content=ai_message))
-        # if previous_human_messages:
-        #     messages.append(HumanMessage(content=previous_human_messages[-1]))
-        # if previous_ai_messages:
-        #     messages.append(AIMessage(content=previous_ai_messages[-1]))
+        if previous_human_messages:
+            messages.append(HumanMessage(content=previous_human_messages[-1]))
+        if previous_ai_messages:
+            messages.append(AIMessage(content=previous_ai_messages[-1]))
         messages.append(HumanMessage(content=user_input))
         print("MESSAGES: ", messages)
         print("PREVIOUS_USER: ", previous_human_messages)
