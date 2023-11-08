@@ -100,11 +100,16 @@ async def get_tax_or_price_info(request: Request):
     chatmodel = Model()
     res = await request.json()
     address = res["customData"].get("address", "")
+    user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
     messages = chatmodel.history_add(message_history)
     res = get_tax_informatiom(address)
     messages.append(SystemMessage(
-            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information about taxes: {res}. This property located at: {address}. Provide this info in readable format."
+            content=f"""You have User message:{user_message}.
+            This property located at: {address}.
+            You have information about taxes: {res}.
+            Use this information to provide a concise answer on the User message.
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
@@ -130,7 +135,11 @@ async def google_places(request: Request):
     result = google_places_wrapper(user_query)
 
     messages.append(SystemMessage(
-            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information from google about places: {result}. This property located at: {address}. Provide this info in readable and enhanced format."
+            content=f"""You have User message: {user_message}.
+            This property located at: {address}. 
+            You have information from google about places: {result}.
+            Use this information to provide a concise answer on the User message.
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
@@ -149,11 +158,16 @@ async def find_nearby_homes(request: Request):
     chatmodel = Model()
     res = await request.json()
     address = res["customData"].get("address", "")
+    user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
     messages = chatmodel.history_add(message_history)
     result = get_info_about_nearby_homes(address)
     messages.append(SystemMessage(
-            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about homes nearby {address}. Please provide this info in readable and enhanced format."
+            content=f"""You have User message: {user_message}.
+            This property located at: {address}. 
+            you have information about homes nearby :{result}.
+            Use this information to provide a concise answer on the User message.
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
@@ -179,7 +193,10 @@ async def find_properties_without_address_tool(request: Request):
     result = search_properties_without_address(user_query)
 
     messages.append(SystemMessage(
-            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about homes. Please provide this info in readable and enhanced format."
+            content=f"""You have User message:{user_message}.
+            This is information  about homes:{result}.
+            Use this information to provide a concise answer on the User message
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
@@ -197,13 +214,18 @@ async def find_properties_without_address_tool(request: Request):
 async def get_house_details_tool(request: Request):
     chatmodel = Model()
     res = await request.json()
+    user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
     address = res["customData"].get("address", "")
     messages = chatmodel.history_add(message_history)
     result = get_house_property(address)
 
     messages.append(SystemMessage(
-            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about property located at {address}. Please provide info about this property in readable format."
+            content=f"""This is User message:{user_message}.
+            Property located at {address}.
+            You have information about this property:{result}.
+            Use this information to provide a concise answer on the User message.
+            Always ask if lead need anything else"""
 
         )
     )
@@ -223,7 +245,6 @@ async def find_distance_tool(request: Request):
     chatmodel = Model()
     res = await request.json()
     address = res["customData"].get("address", "")
-    message_history = res["customData"].get("message_history", "")
     user_message = res["customData"]["message"]
     user_query = f"{user_message} +  I am interested in {address}"
     message_history = res["customData"].get("message_history", "")
@@ -231,24 +252,35 @@ async def find_distance_tool(request: Request):
     result_places = google_places_wrapper(user_query)
 
     messages.append(SystemMessage(
-            content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information from google about places: {result_places}. Please extract and provide only addresses of each place line by line"
-
+            content=f"""You have information from google about places: {result_places}.
+            Please extract and provide only addresses of each place line by line. Example: 1.Place: place name, Address: address of this place"""
         )
     )
-    result = llm(messages).content
-    addresses = result.split("\n")
+    addresses_str = llm(messages).content
+    addresses = addresses_str.split("\n")
+    list_addresses = []
+    for element in addresses:
+        if "Address:" in element:
+            list_addresses.append(element)
     final_addresses = f"{address}"
 
-    for address in addresses:
+    for address in list_addresses:
         final_addresses += f"|{address}"
-    final_result = find_distance(final_addresses)
+    distances_result = find_distance(final_addresses)
+    print(distances_result)
+    final_prompt = [SystemMessage(
+        content=f"""This is User message: {user_message}.
+        You have information from google about places: {result_places} and distances: {distances_result}.
+        Use this information to provide a enhanced answer on the User message.
+        Always ask if lead need anything else"""
+    )]
+    result = llm(final_prompt).content
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"find_distance_tool": result}
         async with session.post(webhook_url, json=payload, ssl=False) as response:
             pass
-
-    return {"find_distance_tool": final_result}
+    return {"find_distance_tool": result}
 
 
 LOG_FILE = "logfile.txt"
@@ -283,12 +315,16 @@ async def realtor_get_tax_or_price_info(request: Request):
     res = await request.json()
     address = res["customData"].get("address", "")
     message_history = res["customData"].get("message_history", "")
-    message = res["customData"]["message"]
+    user_message = res["customData"]["message"]
     messages = chatmodel.history_add(message_history)
     result = get_tax_and_price_information_from_realtor(address)
     messages.append(SystemMessage(
-        content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about tax history and price. Please provide answer for user question: {message} using this information."
-    )
+            content=f"""You have User message:{user_message}.
+            This property located at: {address}.
+            You have information about taxes: {result}.
+            Use this information to provide a concise answer on the User message.
+            Always ask if lead need anything else"""
+        )
     )
     result = llm(messages).content
     async with aiohttp.ClientSession() as session:
@@ -306,13 +342,16 @@ async def realtor_get_property_without_address(request: Request):
     res = await request.json()
     address = res["customData"].get("address", "")
     message_history = res["customData"].get("message_history", "")
-    message = res["customData"]["message"]
-    user_query = f"{message} + {address}"
+    user_message = res["customData"]["message"]
+    user_query = f"{user_message} + {address}"
     messages = chatmodel.history_add(message_history)
     result = realtor_search_properties_without_address(user_query)
     messages.append(SystemMessage(
-        content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about homes. Please provide this info in readable and enhanced format."
-    )
+            content=f"""You have User message:{user_message}.
+            This is information about homes:{result}.
+            Use this information to provide a concise answer on the User message
+            Always ask if lead need anything else"""
+        )
     )
     result = llm(messages).content
 
@@ -331,13 +370,17 @@ async def realtor_get_property_details(request: Request):
     res = await request.json()
     address = res["customData"].get("address", "")
     message_history = res["customData"].get("message_history", "")
-    message = res["customData"]["message"]
-    user_query = f"{message} + {address}"
+    user_message = res["customData"]["message"]
+    user_query = f"{user_message} + {address}"
     messages = chatmodel.history_add(message_history)
     result = realtor_get_house_details(user_query)
     messages.append(SystemMessage(
-        content=f"You are a friendly, helpful, and supportive real estate agent named Rick, you have information:{result}, about property located at {address}. Please provide info about this property in readable format."
-    )
+            content=f"""This is User message:{user_message}.
+            Property located at {address}.
+            You have information about this property:{result}.
+            Use this information to provide a concise answer on the User message.
+            Always ask if lead need anything else"""
+        )
     )
     result = llm(messages).content
 
