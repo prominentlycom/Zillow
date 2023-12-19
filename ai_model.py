@@ -1,4 +1,5 @@
 import json
+import time
 
 import aiohttp
 import openai
@@ -34,23 +35,47 @@ functions = [
             "properties": {
                 "location": {
                     "type": "string",
-                    "description": "Location"
+                    "description": "interested location, should be the city name and state code"
+                },
+                "bedsMin": {
+                    "type": "number",
+                    "description": "Minimum requirement number of bedrooms"
                 },
                 "bedsMax": {
                     "type": "number",
-                    "description": "Requirement number of bedrooms"
+                    "description": "Maximum requirement number of bedrooms"
+                },
+                "bathsMin": {
+                    "type": "number",
+                    "description": "Minimum requirement number of bathrooms"
+                },
+                "bathsMax": {
+                    "type": "number",
+                    "description": "Maximum requirement number of bathrooms"
                 },
                 "priceMin": {
                     "type": "number",
-                    "description": "Preferred house price"
+                    "description": "Minimum preferred house price"
                 },
                 "sqftMax": {
                     "type": "number",
-                    "description": "Preferred Square Feet value."
+                    "description": "Maximum preferred Square Feet value."
                 },
                 "buildYearMax": {
                     "type": "number",
-                    "description": "Preferred Year Built value"
+                    "description": "Maximum preferred Year Built value"
+                },
+                "priceMax": {
+                    "type": "number",
+                    "description": "Maximum preferred house price, not more than this value"
+                },
+                "sqftMin": {
+                    "type": "number",
+                    "description": "Minimum preferred Square Feet value."
+                },
+                "buildYearMin": {
+                    "type": "number",
+                    "description": "Minimum preferred Year Built value"
                 }
             }
         }
@@ -71,7 +96,7 @@ def convert_timestamp_to_date(timestamp):
 
 def find_zpid(
     location: Optional[str] = None,
-) -> dict:
+) -> dict|str:
     """Tool that uses Zillow api to find zpid given adress of the house. Use case find zpid when need to use get_house_property tool. Valid params include "location":"location"."""
 
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
@@ -133,7 +158,7 @@ def __get_info_about_home_from_zillow(location: str):
 
 def get_house_property(
     location: Optional[str] = None,
-) -> dict:
+) -> dict|str:
     """Tool that uses Zillow api to get house properties given adress of the house.Use case answer on questions related to the house. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
@@ -167,6 +192,8 @@ def find_distance(addresses: str) -> str:
         if distance_km == "1 m":
             distance_km = "less than 200 m"
         duration = my_dist["duration"]["text"]
+        if data['destination_addresses'][0] == data['origin_addresses'][0]:
+            return "Ask about name of the location that user interested in"
         res = f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}"
         return res
 
@@ -200,18 +227,53 @@ def google_places_wrapper(query: str) -> str:
     return res
 
 
-def get_info_about_nearby_homes(location: str) -> str:
-    """Tool that uses Zillow api to search for nearby properties given adress of the house. Use case answer on questions related to the properties nearby. Valid params include "location":"location"."""
-    result = __get_info_about_home_from_zillow(location)
-    if isinstance(result, str):
-        return result
-    post_processed = result.json()["nearbyHomes"]
-    # on_sale_property = []
-    # for property in post_processed:
-    #     if property["homeStatus"] == "FOR_SALE":
-    #         on_sale_property.append(property)
+def get_info_about_similar_homes(location: str):
+    """Tool that uses Zillow api to search for similar properties given address of the house"""
+    zpid = find_zpid(location)
+    if zpid == "Sorry, could you please give full address":
+        return zpid
+    url = "https://zillow-com1.p.rapidapi.com/similarProperty"
 
-    return post_processed
+    querystring = {"zpid": zpid}
+
+    headers = {
+        "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
+        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+    result = response.json()
+    return result
+
+
+def get_info_about_nearby_homes(location: str) -> list|str:
+    """Tool that uses Zillow api to search for nearby properties given address of the house.
+    Use case answer on questions related to the properties nearby.
+    Valid params include "location":"location"."""
+    gmaps = googlemaps.Client(key=os.getenv("GPLACES_API_KEY"))
+
+    geocode_result = gmaps.geocode(location)
+    coordinates = geocode_result[0]["geometry"]["location"]
+    longitude = coordinates["lng"]
+    latitude = coordinates["lat"]
+
+    url = "https://zillow-com1.p.rapidapi.com/propertyByCoordinates"
+    querystring = {"long": longitude, "lat": latitude, "d": "0.5", "includeSold": "false"}
+    headers = {
+        "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
+        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+
+    on_market_property = []
+    for element in response.json():
+        element = element.get("property")
+        if element and element["homeStatus"] != "OTHER":
+            on_market_property.append(element)
+    if len(on_market_property) == 0:
+        return "There are no on-market properties nearby"
+    return on_market_property
 
 
 def remove_data_about_dates_before_date(
@@ -224,7 +286,8 @@ def remove_data_about_dates_before_date(
 
 
 def get_tax_informatiom(location: str) -> dict:
-    """Tool that uses Zillow api to search for house price, taxHistory and price history the house. Use case answer on questions related to the house price, tax. Valid params include "location":"location"."""
+    """Tool that uses Zillow api to search for house price, taxHistory and price history the house.
+    Use case answer on questions related to the house price, tax. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
         return result
@@ -280,6 +343,8 @@ def search_properties_without_address(user_input: str):
         },
     )
     arguments = response["choices"][0]["message"]["function_call"]["arguments"]
+    print("INPUT: ", user_input)
+    print("ARGUMENTS: ", arguments)
     querystring = json.loads(arguments)
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
 
@@ -289,12 +354,13 @@ def search_properties_without_address(user_input: str):
     }
     result = requests.get(base_url, params=querystring, headers=headers)
     result = result.json()
-    result = result["props"][:10]
-    res = f"This is a search result{result}. Show only base info for each house. Do not show links in response."
+    if "props" not in result:
+        res = "There is no result here. Ask user to specify main preferences like location, number of bedrooms, etc."
+    else:
+        result = result["props"][:10]
 
-    webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-    payload = {"search_properties_without_address": res}
-    requests.post(webhook_url, json=payload)
+        res = f"This is a search result{result}. Show only base info for each house. Do not show links in response."
+
     return res
 
 
@@ -384,14 +450,15 @@ class Model:
         # self.agent_chain.agent.llm_chain.prompt.messages[0].prompt.template = self.agent_chain.agent.llm_chain.prompt.messages[0].prompt.template.replace('Thought: I now know the final answer','Thought:  I have gathered detailed information to answer the question')
         print("Prompt ", self.agent_chain.agent.llm_chain.prompt.messages)
 
-    def split_messages(self, text):
+    def split_messages(self, text, contact_name):
         """Function to split chat history and return them as two separete lists. Last user message is skipped."""
         user_messages, ai_messages = [], []
-        for single_sample in text.split("You:"):
+        print("TEXT_HISTORY: ", text)
+        for single_sample in text.split(f"{contact_name}:"):
             if single_sample.strip() != "":
                 # skip user message
-                if len(single_sample.split("AI:")) == 2:
-                    user_message, ai_message = single_sample.split("AI:")
+                if len(single_sample.split("Rick:")) == 2:
+                    user_message, ai_message = single_sample.split("Rick:")
                     user_message = user_message.strip()
                     ai_message = ai_message.strip()
                     user_messages.append(user_message)
@@ -418,9 +485,9 @@ class Model:
             i += 1
         return previous_human_messages, previous_ai_messages
 
-    async def response(self, user_input, message_history):
+    async def response(self, user_input, message_history, contact_name):
         """Repsond on user's message"""
-        user_messages, ai_messages = self.split_messages(message_history)
+        user_messages, ai_messages = self.split_messages(message_history, contact_name)
         previous_human_messages, previous_ai_messages = self.add_memory(
             user_messages, ai_messages
         )
@@ -433,14 +500,16 @@ class Model:
             user_input, ai_response, previous_human_messages, previous_ai_messages
         )
 
-    def history_add(self, message_history):
-        user_messages, ai_messages = self.split_messages(message_history)
+    def history_add(self, message_history, contact_name):
+        user_messages, ai_messages = self.split_messages(message_history, contact_name)
         previous_human_messages, previous_ai_messages = self.add_memory(
             user_messages, ai_messages
         )
         self.clip_context()
         messages = []
-        if previous_human_messages and previous_ai_messages:
+        print("PREVIOUS_HUMAN: ", previous_human_messages)
+        print("USER_MESSAGES: ", user_messages)
+        if user_messages and ai_messages:
             for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
                 messages.append(HumanMessage(content=human_message))
                 messages.append(AIMessage(content=ai_message))
@@ -454,6 +523,7 @@ class Model:
         previous_ai_messages,
     ):
         """Additional ChatGPT request to enhance AI response"""
+        print("FINAL ANSWER: ", rough_ai_response)
         llm = ChatOpenAI(temperature=0.7, max_tokens=450, model="gpt-3.5-turbo")
         messages = [
             SystemMessage(
