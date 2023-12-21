@@ -116,7 +116,7 @@ async def get_tax_or_price_info(request: Request):
             This property located at: {address}.
             You have information about taxes: {res}.
             Use this information to provide a concise answer on the User message.
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm(messages).content
@@ -165,7 +165,7 @@ async def google_places(request: Request):
             This property located at: {address}.
             You have information from google about places: {result}.
             Use this information and read the websites if necessary to provide a enhanced answer on the User message.
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm_gpt_4(messages).content
@@ -196,7 +196,7 @@ async def find_similar_homes(request: Request):
                 This property located at: {address}.
                 You have information about similar houses :{result}.
                 Use this information to provide a concise answer on the User message.
-                Always ask if lead need anything else"""
+                Always ask if the lead needs anything else"""
     )
     )
     result = llm(messages).content
@@ -227,7 +227,7 @@ async def find_nearby_homes(request: Request):
             This property located at: {address}.
             you have information about homes nearby :{result}.
             Use this information to provide a concise answer on the User message.
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm(messages).content
@@ -260,7 +260,7 @@ async def find_properties_without_address_tool(request: Request):
             content=f"""You have User message:{user_message}.
             This is information  about homes:{result}.
             Use this information to provide a concise answer on the User message
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm(messages).content
@@ -291,8 +291,8 @@ async def get_house_details_tool(request: Request):
             content=f"""This is User message:{user_message}.
             Property located at {address}.
             You have information about this property:{result}.
-            Use this information to provide a concise answer on the User message without any links.
-            Always ask if lead need anything else"""
+            Use this information to provide a concise answer to the User message without any links.
+            Always ask if the lead needs anything else"""
 
         )
     )
@@ -360,7 +360,7 @@ async def find_distance_tool(request: Request):
         content=f"""This is User message: {user_message}.
         You have information from google about places: {result_places} and distances: {distances_result}.
         Use this information to provide a enhanced answer on the User message.
-        Always ask if lead need anything else"""
+        Always ask if the lead needs anything else"""
     )]
     result = llm(final_prompt).content
     print("MESSAGES: ", messages)
@@ -415,7 +415,7 @@ async def realtor_get_tax_or_price_info(request: Request):
             This property located at: {address}.
             You have information about taxes: {result}.
             Use this information to provide a concise answer on the User message.
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm(messages).content
@@ -445,7 +445,7 @@ async def realtor_get_property_without_address(request: Request):
             content=f"""You have User message:{user_message}.
             This is information about homes:{result}.
             Use this information to provide a concise answer on the User message
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm(messages).content
@@ -477,7 +477,7 @@ async def realtor_get_property_details(request: Request):
             Property located at {address}.
             You have information about this property:{result}.
             Use this information to provide a concise answer on the User message.
-            Always ask if lead need anything else"""
+            Always ask if the lead needs anything else"""
         )
     )
     result = llm(messages).content
