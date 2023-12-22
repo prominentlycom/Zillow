@@ -18,6 +18,7 @@ from langchain.tools import GooglePlacesTool
 from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 from datetime import datetime
 
+
 # Load .env file
 load_dotenv()
 
@@ -81,6 +82,33 @@ functions = [
         }
     },
 ]
+
+
+def get_agent_listings(agent_id: str):
+    """Tool that get all active listings of provided agent"""
+    all_listings = []
+    page_number = 1
+    while True:
+
+        querystring = {"zuid": agent_id, "page": str(page_number)}
+        print(querystring)
+        url = "https://zillow-com1.p.rapidapi.com/agentActiveListings"
+        headers = {
+            "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
+            "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
+        }
+        response = requests.get(url, headers=headers, params=querystring)
+        time.sleep(1.5)
+        lis = response.json().get("listings")
+        if lis:
+            all_listings.extend(lis)
+        if len(lis) < 10:
+            break
+        else:
+            page_number += 1
+    print("all_listings: ", len(all_listings))
+    return all_listings
+
 
 def convert_timestamp_to_date(timestamp):
     # Convert milliseconds to seconds by dividing by 1000
@@ -227,11 +255,13 @@ def google_places_wrapper(query: str) -> str:
     return res
 
 
-def get_info_about_similar_homes(location: str):
+def get_info_about_similar_homes(location: str, agent_id: str):
     """Tool that uses Zillow api to search for similar properties given address of the house"""
     zpid = find_zpid(location)
     if zpid == "Sorry, could you please give full address":
         return zpid
+    time.sleep(1.5)
+
     url = "https://zillow-com1.p.rapidapi.com/similarProperty"
 
     querystring = {"zpid": zpid}
@@ -243,10 +273,30 @@ def get_info_about_similar_homes(location: str):
 
     response = requests.get(url, headers=headers, params=querystring)
     result = response.json()
-    return result
+    res = check_matched_properties(agent_id, result)
+    return res
 
 
-def get_info_about_nearby_homes(location: str) -> list|str:
+def check_matched_properties(agent_id, func_result):
+    """Check whick objects from agent listings matched search result"""
+    listings = get_agent_listings(agent_id)
+    zpids_agent = []
+    for el in listings:
+        zp_id = el.get("zpid")
+        if zp_id:
+            zpids_agent.append(zp_id)
+
+    matched_homes = []
+    for el in func_result:
+        zpid = el.get("zpid")
+        if zpid and zpid in zpids_agent:
+            matched_homes.append(el)
+    if matched_homes:
+        return matched_homes
+    else:
+        return "There are no such properties in agent listings"
+
+def get_info_about_nearby_homes(location: str, agent_id: str) -> list|str:
     """Tool that uses Zillow api to search for nearby properties given address of the house.
     Use case answer on questions related to the properties nearby.
     Valid params include "location":"location"."""
@@ -256,7 +306,7 @@ def get_info_about_nearby_homes(location: str) -> list|str:
     coordinates = geocode_result[0]["geometry"]["location"]
     longitude = coordinates["lng"]
     latitude = coordinates["lat"]
-
+    time.sleep(1.5)
     url = "https://zillow-com1.p.rapidapi.com/propertyByCoordinates"
     querystring = {"long": longitude, "lat": latitude, "d": "0.5", "includeSold": "false"}
     headers = {
@@ -273,7 +323,8 @@ def get_info_about_nearby_homes(location: str) -> list|str:
             on_market_property.append(element)
     if len(on_market_property) == 0:
         return "There are no on-market properties nearby"
-    return on_market_property
+    result = check_matched_properties(agent_id, on_market_property)
+    return result
 
 
 def remove_data_about_dates_before_date(
@@ -457,8 +508,8 @@ class Model:
         for single_sample in text.split(f"{contact_name}:"):
             if single_sample.strip() != "":
                 # skip user message
-                if len(single_sample.split("Rick:")) == 2:
-                    user_message, ai_message = single_sample.split("Rick:")
+                if len(single_sample.split("Agent:")) == 2:
+                    user_message, ai_message = single_sample.split("Agent:")
                     user_message = user_message.strip()
                     ai_message = ai_message.strip()
                     user_messages.append(user_message)
