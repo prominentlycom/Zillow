@@ -273,8 +273,10 @@ def get_info_about_similar_homes(location: str, agent_id: str):
 
     response = requests.get(url, headers=headers, params=querystring)
     result = response.json()
-    res = check_matched_properties(agent_id, result)
-    return res
+    if agent_id:
+        res = check_matched_properties(agent_id, result)
+        return res
+    return result
 
 
 def check_matched_properties(agent_id, func_result):
@@ -323,8 +325,10 @@ def get_info_about_nearby_homes(location: str, agent_id: str) -> list|str:
             on_market_property.append(element)
     if len(on_market_property) == 0:
         return "There are no on-market properties nearby"
-    result = check_matched_properties(agent_id, on_market_property)
-    return result
+    if agent_id:
+        result = check_matched_properties(agent_id, on_market_property)
+        return result
+    return on_market_property
 
 
 def remove_data_about_dates_before_date(

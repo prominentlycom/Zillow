@@ -117,6 +117,7 @@ async def get_tax_or_price_info(request: Request):
             content=f"""You have User message:{user_message}.
             This property located at: {address}.
             You have information about taxes: {res}.
+            If there is no specific request, use only information about the last 2 years.
             Use this information to provide a concise answer on the User message.
             Always ask if the lead needs anything else"""
         )
@@ -251,21 +252,25 @@ async def find_agent_listings(request: Request):
     res = await request.json()
     email = res.get("email")
     phone = res.get("phone")
-    user_message = res["user_message"]
-    agent_id = res["customData"]["agent_id"]
+    user_message = res["customData"]["message"]
+    agent_id = res["customData"].get("agent_id", "")
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
-    listings = get_agent_listings(agent_id)
-    messages.append(SystemMessage(
-            content=f"""This is user message:{user_message}.
-            You have information about real estate agent listings: {listings}
-            Use this listings and provide the best suitable property from it according to user message with short info and link.
-            If there are no options in the listings that are suitable according to user message, write 'I will send more later'.
-            If you have an option then ask 'do you want something like this?' ant the end"""
+    if agent_id:
+        listings = get_agent_listings(agent_id)
+        messages.append(SystemMessage(
+                content=f"""This is user message:{user_message}.
+                You have information about real estate agent listings: {listings}
+                Use this listings and provide the best suitable property from it according to user message with short info and link.
+                If there are no options in the listings that are suitable according to user message, write 'I will send more later'.
+                If you have an option then ask 'do you want something like this?' ant the end"""
+            )
         )
-    )
-    result = llm(messages).content
+        result = llm(messages).content
+    else:
+        print("ELSE_OPTION")
+        result = await find_properties_without_address_tool(request)
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
@@ -293,7 +298,8 @@ async def find_properties_without_address_tool(request: Request):
     messages.append(SystemMessage(
             content=f"""You have User message:{user_message}.
             This is information  about homes:{result}.
-            Use this information to provide a concise answer on the User message
+            Use this information to provide a concise answer on the User message.
+            Provide only few options which match the best with User request.
             Always ask if the lead needs anything else"""
         )
     )
@@ -305,7 +311,7 @@ async def find_properties_without_address_tool(request: Request):
         async with session.post(webhook_url, json=payload, ssl=False) as response:
             pass
 
-    return {"bot_response": result}
+    return result
 
 
 @app.post("/get_house_details_tool")
