@@ -197,6 +197,7 @@ def get_house_property(
 
 def find_distance(addresses: str) -> str:
     """Find distance tool, useful when need to find distance between two exact addresses"""
+    print("Adresses: ", addresses)
     splitted_addresses = addresses.split("|")
     gmaps = googlemaps.Client(key=os.getenv("GPLACES_API_KEY"))
 

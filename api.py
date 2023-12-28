@@ -356,54 +356,61 @@ async def find_distance_tool(request: Request):
     address = res["customData"].get("address", "")
     user_message = res["customData"]["message"]
     contact_name = res["customData"]["contact_name"]
+    place_address = res["customData"].get("place_address", "")
     user_query = f"{user_message}, nearby {address}"
     message_history = res["customData"].get("message_history", "")
-    city_state = address.split(",")
-    print("FIRST_SPLIT_ADDRESS: ", city_state)
-    if len(city_state) > 2:
-        city_state = city_state[-2:]
+    if place_address:
+        list_addresses = []
+        list_addresses.append(place_address)
+        result_places = google_places_wrapper(f"show me places at this address: {place_address}")
+        messages = chatmodel.history_add(message_history, contact_name)
     else:
-        city_state = ""
-    print("CITY_STATE: ", city_state)
-    print("USER_QUERY: ", user_query)
-    result_places = google_places_wrapper(user_query)
-    message = [SystemMessage(
-        content=f"You are helpful assistant. If {result_places} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
-    query = llm(message).content
-    print("CHECK if address is same: ", query)
-    if "Google Places did not find" in result_places or query == "Same address":
-        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'")]
+        city_state = address.split(",")
+        print("FIRST_SPLIT_ADDRESS: ", city_state)
+        if len(city_state) > 2:
+            city_state = city_state[-2:]
+        else:
+            city_state = ""
+        print("CITY_STATE: ", city_state)
+        print("USER_QUERY: ", user_query)
+        result_places = google_places_wrapper(user_query)
+        message = [SystemMessage(
+            content=f"You are helpful assistant. If {result_places} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
         query = llm(message).content
-        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}")
-        result_places = google_places_wrapper(f"{query}, {city_state}")
-    messages = chatmodel.history_add(message_history, contact_name)
-    messages.append(SystemMessage(
-            content=f"""You have information from google about places: {result_places}.
-            Please extract and provide only addresses of each place line by line. Example: 1.Place: place name, Address: address of this place"""
+        print("CHECK if address is same: ", query)
+        if "Google Places did not find" in result_places or query == "Same address":
+            message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'")]
+            query = llm(message).content
+            print("PARAPHRASED_QUERY: ", f"{query}, {city_state}")
+            result_places = google_places_wrapper(f"{query}, {city_state}")
+        messages = chatmodel.history_add(message_history, contact_name)
+        messages.append(SystemMessage(
+                content=f"""You have information from google about places: {result_places}.
+                Please extract and provide only addresses of each place line by line. Example: 1.Place: place name, Address: address of this place"""
+            )
         )
-    )
-    addresses_str = llm(messages).content
+        addresses_str = llm(messages).content
 
-    addresses = addresses_str.split("\n")
-    print("ADDRESSES: ", addresses)
-    list_addresses = []
-    for element in addresses:
-        if "Address:" in element:
-            list_addresses.append(element)
+        addresses = addresses_str.split("\n")
+        print("ADDRESSES: ", addresses)
+        list_addresses = []
+        for element in addresses:
+            if "Address:" in element:
+                list_addresses.append(element)
     final_addresses = f"{address}"
 
     for address in list_addresses:
         final_addresses += f"|{address}"
     distances_result = find_distance(final_addresses)
     print(distances_result)
-    final_prompt = [SystemMessage(
+    messages.append(SystemMessage(
         content=f"""This is User message: {user_message}.
         You have information from google about places: {result_places} and distances: {distances_result}.
         Use this information to provide a enhanced answer on the User message.
         Always ask if the lead needs anything else"""
-    )]
-    result = llm(final_prompt).content
-    print("MESSAGES: ", messages)
+    ))
+    result = llm_gpt_4(messages).content
+    # print("MESSAGES: ", messages)
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
