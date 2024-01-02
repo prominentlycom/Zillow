@@ -67,11 +67,11 @@ async def send_message_to_ai(request: Request):
 
         print("BOT_RESPONSE:", ai_response)
 
-        async with aiohttp.ClientSession() as session:
-            webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-            payload = {"bot_response": ai_response, "phone": phone, "email": email}
-            async with session.post(webhook_url, json=payload, ssl=False) as response:
-                pass
+        # async with aiohttp.ClientSession() as session:
+        #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        #     payload = {"bot_response": ai_response, "phone": phone, "email": email}
+        #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+        #         pass
 
         return {"bot_response": ai_response}
 
@@ -92,11 +92,11 @@ async def get_summary(request: Request):
     summary = chatmodel.get_summary_of_conversation(message_history)
     # summary = f"{summary}"
     print(summary)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"summary": summary, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"summary": summary, "phone": phone, "email": email}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
     return {"summary": summary}
 
@@ -237,11 +237,11 @@ async def find_nearby_homes(request: Request):
     )
     result = llm(messages).content
 
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
     return {"bot_response": result}
 
@@ -271,11 +271,11 @@ async def find_agent_listings(request: Request):
     else:
         print("ELSE_OPTION")
         result = await find_properties_without_address_tool(request)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
     return {"bot_response": result}
 
@@ -298,18 +298,19 @@ async def find_properties_without_address_tool(request: Request):
     messages.append(SystemMessage(
             content=f"""You have User message:{user_message}.
             This is information  about homes:{result}.
+            Use only 3 options with base info (such as address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
+            Always provide the url to each property that you use.
             Use this information to provide a concise answer on the User message.
-            Provide only few options which match the best with User request.
             Always ask if the lead needs anything else"""
         )
     )
-    result = llm(messages).content
+    result = llm_gpt_4(messages).content
 
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
     return result
 
@@ -337,12 +338,12 @@ async def get_house_details_tool(request: Request):
         )
     )
     result = llm(messages).content
-    print("MESSAGES: ", messages)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    # print("MESSAGES: ", messages)
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
     return {"bot_response": result}
 
@@ -354,68 +355,99 @@ async def find_distance_tool(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     address = res["customData"].get("address", "")
+    print("FIRST_PRINT_ADDRESS: ", address)
+    address = address.strip()
+    print("SECOND_PRINT_ADDRESS: ", address)
     user_message = res["customData"]["message"]
     contact_name = res["customData"]["contact_name"]
     place_address = res["customData"].get("place_address", "")
     user_query = f"{user_message}, nearby {address}"
     message_history = res["customData"].get("message_history", "")
-    if place_address:
-        list_addresses = []
-        list_addresses.append(place_address)
-        result_places = google_places_wrapper(f"show me places at this address: {place_address}")
-        messages = chatmodel.history_add(message_history, contact_name)
-    else:
-        city_state = address.split(",")
-        print("FIRST_SPLIT_ADDRESS: ", city_state)
-        if len(city_state) > 2:
-            city_state = city_state[-2:]
-        else:
-            city_state = ""
-        print("CITY_STATE: ", city_state)
-        print("USER_QUERY: ", user_query)
-        result_places = google_places_wrapper(user_query)
-        message = [SystemMessage(
-            content=f"You are helpful assistant. If {result_places} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
-        query = llm(message).content
-        print("CHECK if address is same: ", query)
-        if "Google Places did not find" in result_places or query == "Same address":
-            message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'")]
-            query = llm(message).content
-            print("PARAPHRASED_QUERY: ", f"{query}, {city_state}")
-            result_places = google_places_wrapper(f"{query}, {city_state}")
-        messages = chatmodel.history_add(message_history, contact_name)
-        messages.append(SystemMessage(
-                content=f"""You have information from google about places: {result_places}.
-                Please extract and provide only addresses of each place line by line. Example: 1.Place: place name, Address: address of this place"""
-            )
-        )
-        addresses_str = llm(messages).content
 
-        addresses = addresses_str.split("\n")
-        print("ADDRESSES: ", addresses)
-        list_addresses = []
-        for element in addresses:
-            if "Address:" in element:
-                list_addresses.append(element)
+    city_state = address.split(",")
+    print("FIRST_SPLIT_ADDRESS: ", city_state)
+    if len(city_state) > 2:
+        city_state = city_state[-2:]
+    else:
+        city_state = ""
+    print("CITY_STATE: ", city_state)
+    print("USER_QUERY: ", user_query)
+    result_places = google_places_wrapper(user_query)
+    message = [SystemMessage(
+        content=f"You are helpful assistant. If {result_places} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
+    query = llm(message).content
+    print("CHECK if address is same: ", query)
+    if "Google Places did not find" in result_places or query == "Same address":
+        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'")]
+        query = llm(message).content
+        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}")
+        result_places = google_places_wrapper(f"{query}, {city_state}")
+    messages = chatmodel.history_add(message_history, contact_name)
+    messages.append(SystemMessage(
+            content=f"""You have information from google about places: {result_places}.
+            Please extract and provide only addresses of each place line by line. Example: 1.Place: place name, Address: address of this place"""
+        )
+    )
+    addresses_str = llm(messages).content
+
+    addresses = addresses_str.split("\n")
+    print("ADDRESSES: ", addresses)
+    list_addresses = []
+    for element in addresses:
+        if "Address:" in element:
+            list_addresses.append(element)
     final_addresses = f"{address}"
 
-    for address in list_addresses:
-        final_addresses += f"|{address}"
+    for element in list_addresses:
+        final_addresses += f"|{element}"
     distances_result = find_distance(final_addresses)
-    print(distances_result)
+    if not distances_result:
+        print("Place address: ", place_address)
+        list_addresses = []
+        list_addresses.append(place_address)
+        final_addresses = f"{address}"
+
+        for element in list_addresses:
+            final_addresses += f"|{element}"
+        # result_places = google_places_wrapper(f"{place_address}")
+        # print("PLACES: ", result_places)
+        distances_result = find_distance(final_addresses)
+        if distances_result == "Sorry, couldn't find the distance":
+            print("TRIIIIGER")
+            result_places = google_places_wrapper(place_address)
+            messages = [SystemMessage(
+                content=f"""You have information from google about places: {result_places}.
+                        Please extract and provide only addresses of each place line by line. Example: 1.Place: place name, Address: address of this place"""
+            )]
+            addresses_str = llm(messages).content
+            print("ADRESSES_STR: ", addresses_str)
+
+            addresses = addresses_str.split("\n")
+            print("ADDRESSES: ", addresses)
+            list_addresses = []
+            for element in addresses:
+                if "Address:" in element:
+                    list_addresses.append(element)
+            final_addresses = f"{address}"
+            print("last_check_address_field: ", address)
+            for element in list_addresses:
+                final_addresses += f"|{element}"
+            distances_result = find_distance(final_addresses)
+        messages = chatmodel.history_add(message_history, contact_name)
+    print("DISTANCES_RESULT: ", distances_result)
     messages.append(SystemMessage(
         content=f"""This is User message: {user_message}.
         You have information from google about places: {result_places} and distances: {distances_result}.
-        Use this information to provide a enhanced answer on the User message.
+        Use this information to provide a concise answer on the User message.
         Always ask if the lead needs anything else"""
     ))
     result = llm_gpt_4(messages).content
     # print("MESSAGES: ", messages)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
     return {"bot_response": result}
 
 

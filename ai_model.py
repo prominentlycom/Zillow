@@ -155,6 +155,8 @@ def post_process_house_property(house_property):
     print("HOUSE_PROPERTY_VARIABLE: ", house_property)
     house_property.pop("nearbyHomes")
     house_property.pop("listed_by")
+    house_property.pop("brokerageName")
+    house_property.pop("contact_recipients")
     house_property.pop("priceHistory")
     house_property.pop("resoFacts")
     house_property.pop("attributionInfo")
@@ -206,15 +208,21 @@ def find_distance(addresses: str) -> str:
         address_regex = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
         match = re.search(address_regex, address2)
         if not match:
-            address2 = (
-                GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=1))
-                .run(f"{address2} near {address1}")
-                .split("Address:")[1]
-                .split("\n")[0]
-            )
+            print("NOT_MATCH")
+            try:
+                address2 = (
+                    GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=1))
+                    .run(f"{address2} near {address1}")
+                    .split("Address:")[1]
+                    .split("\n")[0]
+                )
+            except IndexError:
+                return "Sorry, couldn't find the distance"
+        print("ADDRESS2: ", address2)
         data = gmaps.distance_matrix(address1, address2)
         my_dist = data["rows"][0]["elements"][0]
         if my_dist["status"] == "NOT_FOUND":
+            print("AVADAKEDAVRA")
             return "Sorry, couldn't find the distance"
 
         distance_km = my_dist["distance"]["text"]
@@ -222,8 +230,10 @@ def find_distance(addresses: str) -> str:
             distance_km = "less than 200 m"
         duration = my_dist["duration"]["text"]
         if data['destination_addresses'][0] == data['origin_addresses'][0]:
+            print("NOTHING WAS FOUND")
             return "Ask about name of the location that user interested in"
         res = f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}"
+        print("THE FINAL OPTION", res)
         return res
 
     elif len(splitted_addresses) > 2:
