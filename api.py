@@ -119,7 +119,7 @@ async def get_tax_or_price_info(request: Request):
 
 Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and available tax information: "{res}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information." Emphasize utilizing tax details from the last two years unless specified otherwise by the user.
 
-Craft responses that are informative, concise, and directly related to the user's inquiry within their message.
+Craft responses that are short, concise, and directly related to the user's inquiry within their message.
 
 Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed.
 """
@@ -266,13 +266,14 @@ async def find_agent_listings(request: Request):
     phone = res.get("phone")
     user_message = res["customData"]["message"]
     agent_id = res["customData"].get("agent_id", "")
+    preferences = res["customData"].get("preferences", "")
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
     if agent_id:
         listings = get_agent_listings(agent_id)
         messages.append(SystemMessage(
-                content=f"""This is user message:{user_message}.
+                content=f"""This is user message:{user_message} and preferences: {preferences}.
                 You have information about real estate agent listings: {listings}
                 Use this listings and provide the best suitable property from it according to user message with short info, photo, and link.
                 If there are no options in the listings that are suitable according to user message, write 'I will send more later'.
@@ -299,16 +300,17 @@ async def find_properties_without_address_tool(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     address = res["customData"].get("address", "")
+    preferences = res["customData"].get("preferences", "")
     message_history = res["customData"].get("message_history", "")
     user_message = res["customData"]["message"]
-    user_query = f"{user_message} +  I am interested in {address}"
+    user_query = f"{user_message} +  I am interested in {address}, {preferences}"
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
     result = search_properties_without_address(user_query)
     print("USER_QUERY: ", user_query)
 
     messages.append(SystemMessage(
-            content=f"""You have User message:{user_message}.
+            content=f"""You have User message:{user_message}, {preferences}.
             This is information  about homes:{result}.
             Use only 3 options with base info (such as address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
             Always provide the url and property photo to each property that you use.
@@ -346,7 +348,7 @@ async def get_house_details_tool(request: Request):
 
 Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about this property: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
 
-Craft responses that are concise, with links, and directly related to the user's inquiry within their message.
+Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
 
 Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
 
@@ -454,7 +456,7 @@ async def find_distance_tool(request: Request):
 
 Your main task is provide response to the user's message: "{user_message}", utilize information from google about places: "{result_places}" and information about distances "{distances_result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
 
-Craft responses that are concise, with links, and directly related to the user's inquiry within their message.
+Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
 
 Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
     ))

@@ -3,6 +3,7 @@ import time
 
 import aiohttp
 import openai
+from googlemaps.exceptions import ApiError
 from pydantic import BaseModel, Field
 import requests
 import re
@@ -222,7 +223,6 @@ def find_distance(addresses: str) -> str:
         data = gmaps.distance_matrix(address1, address2)
         my_dist = data["rows"][0]["elements"][0]
         if my_dist["status"] == "NOT_FOUND":
-            print("AVADAKEDAVRA")
             return "Sorry, couldn't find the distance"
 
         distance_km = my_dist["distance"]["text"]
@@ -239,18 +239,21 @@ def find_distance(addresses: str) -> str:
     elif len(splitted_addresses) > 2:
         answer = ""
         address1 = splitted_addresses[0]
-        for i in range(1, len(splitted_addresses)):
-            address2 = splitted_addresses[i]
-            data = gmaps.distance_matrix(address1, address2)
-            my_dist = data["rows"][0]["elements"][0]
-            if my_dist["status"] == "NOT_FOUND":
-                return "Sorry, couldn't find the distance"
+        try:
+            for i in range(1, len(splitted_addresses)):
+                address2 = splitted_addresses[i]
+                data = gmaps.distance_matrix(address1, address2)
+                my_dist = data["rows"][0]["elements"][0]
+                if my_dist["status"] == "NOT_FOUND":
+                    return "Sorry, couldn't find the distance"
 
-            distance_km = my_dist["distance"]["text"]
-            if distance_km == "1 m":
-                distance_km = "less than 200 m"
-            duration = my_dist["duration"]["text"]
-            answer += f"Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}\n"
+                distance_km = my_dist["distance"]["text"]
+                if distance_km == "1 m":
+                    distance_km = "less than 200 m"
+                duration = my_dist["duration"]["text"]
+                answer += f"Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}\n"
+        except ApiError:
+            return "Sorry, couldn't find the distance"
         res = f"Include this information while answering \n{answer}"
         return res
 
@@ -260,7 +263,7 @@ def google_places_wrapper(query: str) -> str:
     Useful for when you need to find address of some place near property
     discover addressed from ambiguous text or validate address.
     Input should be a search query."""
-    places_tool = GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=5))
+    places_tool = GooglePlacesTool(api_wrapper=GooglePlacesAPIWrapper(top_k_results=3))
     res = places_tool.run(query)
     print(f"Google places result : {res}")
     return res
