@@ -33,7 +33,7 @@ app = FastAPI()
 
 current_request_task = None
 
-llm = ChatOpenAI(temperature=0.3, max_tokens=650, model="gpt-3.5-turbo-16k")
+llm = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-3.5-turbo-16k")
 llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=650, model="gpt-4-1106-preview")
 
 
@@ -116,12 +116,9 @@ async def get_tax_or_price_info(request: Request):
     messages.append(SystemMessage(
             content=f"""
             Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-
-Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and available tax information: "{res}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information." Emphasize utilizing tax details from the last two years unless specified otherwise by the user.
-
-Craft responses that are short, concise, and directly related to the user's inquiry within their message.
-
-Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed.
+            Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and available tax information: "{res}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information." Emphasize utilizing tax details from the last two years unless specified otherwise by the user.
+            Craft responses that are short, concise, and directly related to the user's inquiry within their message.
+            Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed.
 """
         )
     )
@@ -169,12 +166,9 @@ async def google_places(request: Request):
     messages.append(SystemMessage(
             content=f"""
             Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-
-Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information from google about places: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-
-Craft responses that are short, concise, and directly related to the user's inquiry within their message.
-
-Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
+            Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information from google about places: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
+            Craft responses that are short, concise, and directly related to the user's inquiry within their message.
+            Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
         )
     )
     result = llm_gpt_4(messages).content
@@ -204,12 +198,9 @@ async def find_similar_homes(request: Request):
     messages.append(SystemMessage(
         content=f"""
                 Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-
-Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about similar houses: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-
-Craft responses that are concise, with links, and directly related to the user's inquiry within their message.
-
-Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
+                Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about similar houses: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
+                Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
+                Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
     )
     )
     result = llm(messages).content
@@ -239,12 +230,9 @@ async def find_nearby_homes(request: Request):
     messages.append(SystemMessage(
             content=f"""
             Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-
-Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about homes nearby: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-
-Craft responses that are concise, with links, and directly related to the user's inquiry within their message.
-
-Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
+            Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about homes nearby: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
+            Craft responses that are sort, concise, with links, and directly related to the user's inquiry within their message.
+            Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
         )
     )
     result = llm(messages).content
@@ -314,7 +302,7 @@ async def find_properties_without_address_tool(request: Request):
             This is information  about homes:{result}.
             Use only 3 options with base info (such as address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
             Always provide the url and property photo to each property that you use.
-            Use this information to provide a concise answer on the User message.
+            Use this information to provide a short and concise answer on the User message.
             Always ask if the lead needs anything else"""
         )
     )
@@ -341,26 +329,24 @@ async def get_house_details_tool(request: Request):
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
     result = get_house_property(address)
+    photo_link = result["imgSrc"]
 
     messages.append(SystemMessage(
             content=f"""
             Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-
-Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about this property: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-
-Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
-
-Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
+            Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about this property: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
+            Craft responses that are short, concise, with property url, and directly related to the user's inquiry within their message.
+            Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
 
         )
     )
     result = llm(messages).content
-    print("MESSAGES: ", messages)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+#     print("MESSAGES: ", messages)
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
     return {"bot_response": result}
 
@@ -453,12 +439,9 @@ async def find_distance_tool(request: Request):
     messages.append(SystemMessage(
         content=f"""
         Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-
-Your main task is provide response to the user's message: "{user_message}", utilize information from google about places: "{result_places}" and information about distances "{distances_result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-
-Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
-
-Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
+        Your main task is provide response to the user's message: "{user_message}", utilize information from google about places: "{result_places}" and information about distances "{distances_result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
+        Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
+        Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
     ))
     result = llm_gpt_4(messages).content
     print("MESSAGES: ", messages)
