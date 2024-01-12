@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import re
 
 import aiohttp
 import os
@@ -117,7 +118,7 @@ async def get_tax_or_price_info(request: Request):
             content=f"""
             Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and available tax information: "{res}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information." Emphasize utilizing tax details from the last two years unless specified otherwise by the user.
-            Craft responses that are short, concise, and directly related to the user's inquiry within their message.
+            Craft responses in 2-3 sentences that are short, concise, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed.
 """
         )
@@ -258,27 +259,37 @@ async def find_agent_listings(request: Request):
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
+    photo_link = ""
     if agent_id:
         listings = get_agent_listings(agent_id)
         messages.append(SystemMessage(
                 content=f"""This is user message:{user_message} and preferences: {preferences}.
-                You have information about real estate agent listings: {listings}
-                Use this listings and provide the best suitable property from it according to user message with short info, photo, and link.
+                You have information about real estate agent listings: {listings["res"]}
+                Use this listings and provide 1 option which parameters match the best with User request.
                 If there are no options in the listings that are suitable according to user message, write 'I will send more later'.
                 If you have an option then ask 'do you want something like this?' ant the end"""
             )
         )
         result = llm(messages).content
+        address_regex = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+        match = re.findall(address_regex, result)
+        print("one_address: ", match[0])
+
+        if match[0] in listings["photos"]:
+            photo_link = listings["photos"][match[0]]
+
     else:
         print("ELSE_OPTION")
         result = await find_properties_without_address_tool(request)
-    async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
-            pass
+        photo_link = result["photos"]
+        result = result["bot_response"]
+    # async with aiohttp.ClientSession() as session:
+    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+    #     payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link}
+    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
+    #         pass
 
-    return {"bot_response": result}
+    return {"bot_response": result, "photo_link": photo_link}
 
 
 @app.post("/find_properties_without_address_tool_OLD_VERSION")
@@ -296,25 +307,46 @@ async def find_properties_without_address_tool(request: Request):
     messages = chatmodel.history_add(message_history, contact_name)
     result = search_properties_without_address(user_query)
     print("USER_QUERY: ", user_query)
+    print("RESULT_SEARCH: ", result["res"])
 
     messages.append(SystemMessage(
             content=f"""You have User message:{user_message}, {preferences}.
-            This is information  about homes:{result}.
-            Use only 3 options with base info (such as address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
-            Always provide the url and property photo to each property that you use.
+            This is information  about homes:{result["res"]}.
+            Use only 3 options with base info (such as full address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
+            Always provide the property url to each property that you use.
             Use this information to provide a short and concise answer on the User message.
             Always ask if the lead needs anything else"""
         )
     )
-    result = llm_gpt_4(messages).content
+    response = llm_gpt_4(messages).content
 
+    address_regex = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+    match = re.findall(address_regex, response)
+    print("MATHCED_LIST: ", match)
+    addresses_list = [address.split(", ")[0] for address in match]
+    print("ADDRESSES_LIST: ", addresses_list)
+    photos = result["photos"]
+    keys_to_remove = []
+    for key in photos.keys():
+        address = key.split(", ")[0]
+        if not any(address_part in address for address_part in addresses_list):
+            keys_to_remove.append(key)
+
+    for key in keys_to_remove:
+        del photos[key]
+    count = 1
+    test = {}
+    for key, value in photos.items():
+        test[f"Photo link {count}"] = value
+        count += 1
+    print("PHOTOS: ", test)
     # async with aiohttp.ClientSession() as session:
     #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
     #     payload = {"bot_response": result, "phone": phone, "email": email}
     #     async with session.post(webhook_url, json=payload, ssl=False) as response:
     #         pass
 
-    return result
+    return {"bot_response": response, "photos": test}
 
 
 @app.post("/get_house_details_tool")
@@ -329,24 +361,24 @@ async def get_house_details_tool(request: Request):
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
     result = get_house_property(address)
-    photo_link = result["imgSrc"]
+    # photo_link = result["imgSrc"]
 
     messages.append(SystemMessage(
             content=f"""
             Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about this property: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-            Craft responses that are short, concise, with property url, and directly related to the user's inquiry within their message.
+            Craft responses in 2 - 3 sentences that are short, concise, with detailed url, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
 
         )
     )
     result = llm(messages).content
 #     print("MESSAGES: ", messages)
-    # async with aiohttp.ClientSession() as session:
-    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-    #     payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link}
-    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
-    #         pass
+#     async with aiohttp.ClientSession() as session:
+#         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+#         payload = {"bot_response": result, "phone": phone, "email": email}
+#         async with session.post(webhook_url, json=payload, ssl=False) as response:
+#             pass
 
     return {"bot_response": result}
 

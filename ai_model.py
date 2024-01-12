@@ -37,7 +37,7 @@ functions = [
             "properties": {
                 "location": {
                     "type": "string",
-                    "description": "interested location, should be the city name and state code"
+                    "description": "interested location, should be only the city name and state code"
                 },
                 "bedsMin": {
                     "type": "number",
@@ -108,7 +108,11 @@ def get_agent_listings(agent_id: str):
         else:
             page_number += 1
     print("all_listings: ", len(all_listings))
-    return all_listings
+    photos = {}
+    if all_listings:
+        for element in all_listings:
+            photos[element["address"]["line1"] + ", " + element["address"]["line2"]] = element["primary_photo_url"]
+    return {"res": all_listings, "photos": photos}
 
 
 def convert_timestamp_to_date(timestamp):
@@ -141,6 +145,7 @@ def find_zpid(
         querystring["location"] = location
 
     print(f'Search with {querystring}')
+    time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     # print("FIND_ZPID_RESULT: ", result.json())
     try:
@@ -181,7 +186,7 @@ def __get_info_about_home_from_zillow(location: str):
         querystring = {"zpid": f"{zpid}"}
     else:
         raise Exception("Didn't get zpid")
-
+    time.sleep(1.2)
     result = requests.get(base_url, params=querystring, headers=headers)
     print("RESULT_HOME: ", result.json())
     return result
@@ -284,7 +289,7 @@ def get_info_about_similar_homes(location: str, agent_id: str):
         "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
         "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
     }
-
+    time.sleep(1.5)
     response = requests.get(url, headers=headers, params=querystring)
     result = response.json()
     if agent_id:
@@ -322,14 +327,14 @@ def get_info_about_nearby_homes(location: str, agent_id: str) -> list|str:
     coordinates = geocode_result[0]["geometry"]["location"]
     longitude = coordinates["lng"]
     latitude = coordinates["lat"]
-    time.sleep(1.5)
+
     url = "https://zillow-com1.p.rapidapi.com/propertyByCoordinates"
     querystring = {"long": longitude, "lat": latitude, "d": "0.5", "includeSold": "false"}
     headers = {
         "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
         "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
     }
-
+    time.sleep(1.5)
     response = requests.get(url, headers=headers, params=querystring)
 
     on_market_property = []
@@ -421,16 +426,21 @@ def search_properties_without_address(user_input: str):
         "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
         "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
     }
+    time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     result = result.json()
+    photos = {}
     if "props" not in result:
         res = "There is no result here. Ask user to specify main preferences like location, number of bedrooms, etc."
     else:
         result = result["props"][:10]
 
+        for element in result:
+            photos[element["address"]] = element["imgSrc"]
+
         res = f"This is a search result{result}. Show only base info for each house. Do not show links in response."
 
-    return res
+    return {"res": res, "photos": photos}
 
 
 class Model:
