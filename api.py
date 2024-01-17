@@ -282,6 +282,8 @@ async def find_agent_listings(request: Request):
         print("ELSE_OPTION")
         result = await find_properties_without_address_tool(request)
         photo_link = result["photos"]
+        search_res = result["Search_result"]
+        print("result: ", search_res)
         result = result["bot_response"]
     # async with aiohttp.ClientSession() as session:
     #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
@@ -289,7 +291,7 @@ async def find_agent_listings(request: Request):
     #     async with session.post(webhook_url, json=payload, ssl=False) as response:
     #         pass
 
-    return {"bot_response": result, "photo_link": photo_link}
+    return {"bot_response": result, "photo_link": photo_link, "Search_result": search_res}
 
 
 @app.post("/find_properties_without_address_tool_OLD_VERSION")
@@ -320,8 +322,12 @@ async def find_properties_without_address_tool(request: Request):
     )
     response = llm_gpt_4(messages).content
 
-    address_regex = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
-    match = re.findall(address_regex, response)
+    address_regex_full = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+    address_regex_small = "\d+\s[A-Za-z0-9\s]+\,"
+    match = re.findall(address_regex_full, response)
+    if not match:
+        print("NEW_MATCH")
+        match = re.findall(address_regex_small, response)
     print("MATHCED_LIST: ", match)
     addresses_list = [address.split(", ")[0] for address in match]
     print("ADDRESSES_LIST: ", addresses_list)
@@ -329,7 +335,7 @@ async def find_properties_without_address_tool(request: Request):
     keys_to_remove = []
     for key in photos.keys():
         address = key.split(", ")[0]
-        if not any(address_part in address for address_part in addresses_list):
+        if not any(address_part[:-1] in address for address_part in addresses_list):
             keys_to_remove.append(key)
 
     for key in keys_to_remove:
@@ -346,7 +352,7 @@ async def find_properties_without_address_tool(request: Request):
     #     async with session.post(webhook_url, json=payload, ssl=False) as response:
     #         pass
 
-    return {"bot_response": response, "photos": test}
+    return {"bot_response": response, "photos": test, "Search_result": result["res"]}
 
 
 @app.post("/get_house_details_tool")

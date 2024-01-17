@@ -45,7 +45,7 @@ functions = [
                 },
                 "bedsMax": {
                     "type": "number",
-                    "description": "Maximum requirement number of bedrooms"
+                    "description": "Maximum requirement of bedrooms, not more than this value"
                 },
                 "bathsMin": {
                     "type": "number",
@@ -53,11 +53,11 @@ functions = [
                 },
                 "bathsMax": {
                     "type": "number",
-                    "description": "Maximum requirement number of bathrooms"
+                    "description": "Preferred number of bathrooms"
                 },
-                "priceMin": {
+                "minPrice": {
                     "type": "number",
-                    "description": "Minimum preferred house price"
+                    "description": "Minimum preferred house price, current price - 10%"
                 },
                 "sqftMax": {
                     "type": "number",
@@ -67,7 +67,7 @@ functions = [
                     "type": "number",
                     "description": "Maximum preferred Year Built value"
                 },
-                "priceMax": {
+                "maxPrice": {
                     "type": "number",
                     "description": "Maximum preferred house price, not more than this value"
                 },
@@ -419,9 +419,24 @@ def search_properties_without_address(user_input: str):
     arguments = response["choices"][0]["message"]["function_call"]["arguments"]
     print("INPUT: ", user_input)
     print("ARGUMENTS: ", arguments)
-    querystring = json.loads(arguments)
-    base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
 
+    querystring = json.loads(arguments)
+    if querystring.get("bedsMin") and not querystring.get("bedsMax"):
+        querystring["bedsMax"] = querystring.get("bedsMin")
+    elif querystring.get("bedsMax") and not querystring.get("bedsMin"):
+        querystring["bedsMin"] = querystring.get("bedsMax")
+
+    if querystring.get("bathsMin") and not querystring.get("bathsMax"):
+        querystring["bathsMax"] = querystring.get("bathsMin")
+    elif querystring.get("bathsMax") and not querystring.get("bathsMin"):
+        querystring["bathsMin"] = querystring.get("bathsMax")
+    print("QUERYSTRING: ", querystring, type(querystring))
+    for key, value in querystring.items():
+        querystring[key] = str(value)
+    print("arguments_after: ", querystring)
+
+    base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
+    # querystring = {"location": "Seattle", "home_type": "Houses", "maxPrice": "700000", "bedsMin": "3"}
     headers = {
         "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
         "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
@@ -429,6 +444,7 @@ def search_properties_without_address(user_input: str):
     time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     result = result.json()
+    print("RESULT: ", result)
     photos = {}
     if "props" not in result:
         res = "There is no result here. Ask user to specify main preferences like location, number of bedrooms, etc."
