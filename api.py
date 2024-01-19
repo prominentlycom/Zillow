@@ -314,7 +314,7 @@ async def find_properties_without_address_tool(request: Request):
     messages.append(SystemMessage(
             content=f"""You have User message:{user_message}, {preferences}.
             This is information  about homes:{result["res"]}.
-            Use only 3 options with base info (such as full address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
+            Use up to 3 options with base info (such as full address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
             Always provide the property url to each property that you use.
             Use this information to provide a short and concise answer on the User message.
             Always ask if the lead needs anything else"""

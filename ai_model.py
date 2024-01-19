@@ -278,7 +278,7 @@ def google_places_wrapper(query: str) -> str:
     return res
 
 
-def get_info_about_similar_homes(location: str, agent_id: str):
+def get_info_about_similar_homes(location: str, agent_id=None):
     """Tool that uses Zillow api to search for similar properties given address of the house"""
     zpid = find_zpid(location)
     if zpid == "Sorry, could you please give full address":
@@ -321,7 +321,7 @@ def check_matched_properties(agent_id, func_result):
     else:
         return "There are no such properties in agent listings"
 
-def get_info_about_nearby_homes(location: str, agent_id: str) -> list|str:
+def get_info_about_nearby_homes(location: str, agent_id=None) -> list|str:
     """Tool that uses Zillow api to search for nearby properties given address of the house.
     Use case answer on questions related to the properties nearby.
     Valid params include "location":"location"."""
