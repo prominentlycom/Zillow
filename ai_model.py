@@ -69,7 +69,7 @@ functions = [
                 },
                 "maxPrice": {
                     "type": "number",
-                    "description": "Maximum preferred house price, not more than this value"
+                    "description": "Preferred house price, not more than this value"
                 },
                 "sqftMin": {
                     "type": "number",
@@ -81,12 +81,19 @@ functions = [
                 },
                 "home_type": {
                     "type": "string",
-                    "description": "Preferred home type. Can be 'Houses', 'Townhomes', 'Apartments', 'Condos', 'Multi-family'"
+                    "enum": ["Houses", "Townhomes", "Apartments", "Condos", "Multi-family"],
+                    "description": "Preferred home type. Can be 'Houses', 'Townhomes' for townhouse, 'Apartments', 'Condos', 'Multi-family'"
+                },
+                "keywords": {
+                    "type": "string",
+                    "description": "Keywords for filter properties. Only include key words, ignoring other parts of the sentence."
                 },
             }
         }
     },
 ]
+
+
 
 
 def get_agent_listings(agent_id: str):
@@ -425,6 +432,10 @@ def search_properties_without_address(user_input: str):
     print("ARGUMENTS: ", arguments)
 
     querystring = json.loads(arguments)
+    if querystring.get("minPrice") and not querystring.get("maxPrice"):
+        querystring["maxPrice"] = querystring.pop("minPrice")
+    if querystring.get("minPrice") == querystring.get("maxPrice"):
+        querystring.pop("minPrice")
     if querystring.get("bedsMin") and not querystring.get("bedsMax"):
         querystring["bedsMax"] = querystring.get("bedsMin")
     elif querystring.get("bedsMax") and not querystring.get("bedsMin"):
@@ -448,7 +459,6 @@ def search_properties_without_address(user_input: str):
     time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     result = result.json()
-    print("RESULT: ", result)
     photos = {}
     if "props" not in result:
         res = "There is no result here. Ask user to specify main preferences like location, number of bedrooms, etc."

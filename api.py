@@ -309,7 +309,6 @@ async def find_properties_without_address_tool(request: Request):
     messages = chatmodel.history_add(message_history, contact_name)
     result = search_properties_without_address(user_query)
     print("USER_QUERY: ", user_query)
-    print("RESULT_SEARCH: ", result["res"])
 
     messages.append(SystemMessage(
             content=f"""You have User message:{user_message}, {preferences}.
