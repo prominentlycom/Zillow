@@ -78,7 +78,11 @@ functions = [
                 "buildYearMin": {
                     "type": "number",
                     "description": "Minimum preferred Year Built value"
-                }
+                },
+                "home_type": {
+                    "type": "string",
+                    "description": "Preferred home type. Can be 'Houses', 'Townhomes', 'Apartments', 'Condos', 'Multi-family'"
+                },
             }
         }
     },
