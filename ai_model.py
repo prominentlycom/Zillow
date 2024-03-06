@@ -20,6 +20,7 @@ from langchain.tools import GooglePlacesTool
 from datetime import datetime
 from custom_google_places import CustomGooglePlacesAPIWrapper
 
+
 # Load .env file
 load_dotenv()
 
@@ -37,7 +38,9 @@ functions = [
             "properties": {
                 "location": {
                     "type": "string",
+
                     "description": "interested location, should be only the city name and state code. City name usually has one or two words and started from capital letter"
+
                 },
                 "bedsMin": {
                     "type": "number",
@@ -45,7 +48,9 @@ functions = [
                 },
                 "bedsMax": {
                     "type": "number",
+
                     "description": "Maximum requirement number of bedrooms"
+
                 },
                 "bathsMin": {
                     "type": "number",
@@ -53,11 +58,13 @@ functions = [
                 },
                 "bathsMax": {
                     "type": "number",
+
                     "description": "Maximum requirement number of bathrooms"
                 },
                 "minPrice": {
                     "type": "number",
                     "description": "Minimum preferred house price"
+
                 },
                 "sqftMax": {
                     "type": "number",
@@ -70,6 +77,7 @@ functions = [
                 "maxPrice": {
                     "type": "number",
                     "description": "Maximum preferred house price, not more than this value"
+
                 },
                 "sqftMin": {
                     "type": "number",
@@ -86,12 +94,16 @@ functions = [
                 },
                 "keywords": {
                     "type": "string",
+
                     "description": "Keywords for filter properties. Only include key words belong to area such as high school, garage, waterfront, backyard etc., ignoring other parts of the sentence and helpfull words like 'Big' or 'Small'"
                 }
             }
         }
     },
 ]
+
+
+
 
 
 def get_agent_listings(agent_id: str):
@@ -107,8 +119,10 @@ def get_agent_listings(agent_id: str):
             "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
             "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
         }
+
         time.sleep(1.5)
         response = requests.get(url, headers=headers, params=querystring)
+
         lis = response.json().get("listings")
         if lis:
             all_listings.extend(lis)
@@ -122,6 +136,7 @@ def get_agent_listings(agent_id: str):
         for element in all_listings:
             photos[element["address"]["line1"] + ", " + element["address"]["line2"]] = element["primary_photo_url"]
     return {"res": all_listings, "photos": photos}
+
 
 
 def check_matched_properties(agent_id, func_result):
@@ -144,47 +159,53 @@ def check_matched_properties(agent_id, func_result):
         return "There are no such properties in agent listings"
 
 
+
 def convert_timestamp_to_date(timestamp):
     # Convert milliseconds to seconds by dividing by 1000
     timestamp_seconds = timestamp / 1000
-    
+
     # Create a datetime object from the timestamp
     datetime_obj = datetime.fromtimestamp(timestamp_seconds)
-    
+
     # Format the datetime object as a string and return it
-    formatted_date = datetime_obj.strftime('%Y-%m-%d %H:%M:%S')
+    formatted_date = datetime_obj.strftime("%Y-%m-%d %H:%M:%S")
     return formatted_date
 
 
 def find_zpid(
-    location: Optional[str] = None, 
-) -> dict:
+    location: Optional[str] = None,
+) -> dict|str:
     """Tool that uses Zillow api to find zpid given adress of the house. Use case find zpid when need to use get_house_property tool. Valid params include "location":"location"."""
 
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
-    
+
     headers = {
-	"X-RapidAPI-Key": os.getenv('X-RapidAPI-Key'),
-	"X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
+        "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
+        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
     }
 
-    querystring = {"page":"1"}
-    
+    querystring = {"page": "1"}
+    print("LOCATION: ", location)
     if location is not None:
-        querystring['location'] = location
-        
+        querystring["location"] = location
+
 
     # print(f'Search with {querystring}')
     time.sleep(1.3)
+
+
     result = requests.get(base_url, params=querystring, headers=headers)
-    try :
-        if isinstance(result.json(),list):
+    # print("FIND_ZPID_RESULT: ", result.json())
+    try:
+        if isinstance(result.json(), list):
             return result.json()[0]["zpid"]
         return result.json()["zpid"]
-    except :
+    except:
         return "Sorry, could you please give full address"
 
+
 def post_process_house_property(house_property):
+
     """Remove some information from zillow listing to fit into LLM's context """
     print("HOUSE_PROPERTY_VARIABLE: ", house_property)
     house_property.pop('nearbyHomes')
@@ -195,53 +216,65 @@ def post_process_house_property(house_property):
     house_property.pop('resoFacts')
     house_property.pop('attributionInfo')
     house_property.pop('taxHistory')
+
     return house_property
 
-def __get_info_about_home_from_zillow(location:str):
+
+def __get_info_about_home_from_zillow(location: str):
     zpid = find_zpid(location)
     if zpid == "Sorry, could you please give full address":
         return zpid
-    
+
     base_url = "https://zillow-com1.p.rapidapi.com/property"
-    
+
     headers = {
+
 	"X-RapidAPI-Key": os.getenv('X-RapidAPI-Key'),
 	"X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
+
     }
 
     if zpid is not None:
-        querystring = {"zpid":f"{zpid}"}
+        querystring = {"zpid": f"{zpid}"}
     else:
         raise Exception("Didn't get zpid")
+
         
     time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     print("RESULT: ", result)
+
     return result
 
+
 def get_house_property(
-    location: Optional[str] = None, 
-) -> dict:
+    location: Optional[str] = None,
+) -> dict|str:
     """Tool that uses Zillow api to get house properties given adress of the house.Use case answer on questions related to the house. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
+
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"get_house_property": result}
         requests.post(webhook_url, json=payload)
+
         return result
     post_processed = post_process_house_property(result.json())
     return post_processed
+
 
 def find_distance(addresses:str) -> str:
     '''Find distance tool, useful when need to find distance between two exact addresses'''
     splitted_addresses = addresses.split('|')
     gmaps = googlemaps.Client(key = os.getenv('GPLACES_API_KEY'))
     
+
     if len(splitted_addresses) == 2:
-        address1, address2 =  splitted_addresses[0],splitted_addresses[1]
-        address_regex = '\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}'
+        address1, address2 = splitted_addresses[0], splitted_addresses[1]
+        address_regex = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
         match = re.search(address_regex, address2)
         if not match:
+
             try:
                 address2 = GooglePlacesTool(api_wrapper=CustomGooglePlacesAPIWrapper(top_k_results=1)).run(f'{address2} near {address1}').split('Address:')[1].split('\n')[0]
             except IndexError:
@@ -261,7 +294,7 @@ def find_distance(addresses:str) -> str:
         res = f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}"
         return res
     elif len(splitted_addresses) > 2:
-        answer = ''
+        answer = ""
         address1 = splitted_addresses[0]
         try:
             for i in range(1,len(splitted_addresses)):
@@ -276,11 +309,13 @@ def find_distance(addresses:str) -> str:
                 if distance_km == "1 m":
                     distance_km = 'less than 200 m'
                 duration = my_dist['duration']['text']
+
                 answer += f"Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the duration is {duration}\n"
         except ApiError:
             return "Sorry, couldn't find the distance"
         res = f"Include this information while answering \n{answer}"
         return res
+
     
 def google_places_wrapper(query:str) -> str:
     """ A wrapper around Google Places. 
@@ -288,6 +323,7 @@ def google_places_wrapper(query:str) -> str:
         discover addressed from ambiguous text or validate address.
         Input should be a search query."""
     places_tool = CustomGooglePlacesAPIWrapper(top_k_results=3)
+
     res = places_tool.run(query)
     print(f"Google places result : {res}")
     return res
@@ -310,7 +346,12 @@ def get_info_about_similar_homes(location: str, agent_id=None):
     response = requests.get(url, headers=headers, params=querystring)
     result = response.json()
     if agent_id:
-        res = check_matched_properties(agent_id, result)
+        res = 
+        
+        
+        
+        
+        (agent_id, result)
         return res
     return result
 
@@ -346,40 +387,52 @@ def get_info_about_nearby_homes(location:str, agent_id=None) -> str:
     return on_market_property
 
 
-def remove_data_about_dates_before_date(data:list[dict], date:datetime = datetime(2014, 1, 1)) -> list[dict]:
-    filtered_data = [d for d in data if datetime.strptime((d['time']), '%Y-%m-%d %H:%M:%S') >= date]
+
+
+def remove_data_about_dates_before_date(
+    data: list[dict], date: datetime = datetime(2014, 1, 1)
+) -> list[dict]:
+    filtered_data = [
+        d for d in data if datetime.strptime((d["time"]), "%Y-%m-%d %H:%M:%S") >= date
+    ]
     return filtered_data
 
-def get_tax_informatiom(location:str) -> dict:
-    """Tool that uses Zillow api to search for house price, taxHistory and price history the house. Use case answer on questions related to the house price, tax. Valid params include "location":"location". """
+
+def get_tax_informatiom(location: str) -> dict:
+    """Tool that uses Zillow api to search for house price, taxHistory and price history the house.
+    Use case answer on questions related to the house price, tax. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
         return result
-    post_processed = result.json()['taxHistory']
+    post_processed = result.json()["taxHistory"]
 
-
-    #remove data, when the date was before this
+    # remove data, when the date was before this
     comparison_date = datetime(2014, 1, 1)
-    #post process time to readable format
+    # post process time to readable format
     for i in range(len(post_processed)):
-        if 'time' in post_processed[i].keys():
-            post_processed[i]['time'] = convert_timestamp_to_date(post_processed[i]['time'])
+        if "time" in post_processed[i].keys():
+            post_processed[i]["time"] = convert_timestamp_to_date(
+                post_processed[i]["time"]
+            )
 
     post_processed = remove_data_about_dates_before_date(post_processed)
-          
-    priceHistory = result.json()['priceHistory']
-    #remove useless data
+
+    priceHistory = result.json()["priceHistory"]
+    # remove useless data
     for i in range(len(priceHistory)):
-        if 'attributeSource' in priceHistory[i].keys():
-            priceHistory[i].pop('attributeSource')
-        if 'time' in priceHistory[i].keys():
-            priceHistory[i]['time'] = convert_timestamp_to_date(priceHistory[i]['time'])
+        if "attributeSource" in priceHistory[i].keys():
+            priceHistory[i].pop("attributeSource")
+        if "time" in priceHistory[i].keys():
+            priceHistory[i]["time"] = convert_timestamp_to_date(priceHistory[i]["time"])
     priceHistory = remove_data_about_dates_before_date(priceHistory)
-            
+
     post_processed.append(priceHistory)
-    
-    post_processed.append({'current_price':f"{result.json()['price']} {result.json()['currency']}"})
-    post_processed.append({'propertyTaxRate':result.json()['propertyTaxRate']})
+
+    post_processed.append(
+        {"current_price": f"{result.json()['price']} {result.json()['currency']}"}
+    )
+    post_processed.append({"propertyTaxRate": result.json()["propertyTaxRate"]})
+
     return post_processed
 
 
@@ -403,6 +456,7 @@ def search_properties_without_address(user_input: str):
         },
     )
     arguments = response["choices"][0]["message"]["function_call"]["arguments"]
+
     querystring = json.loads(arguments)
     print("QUERYSTRING: ", querystring)
     if querystring.get("keywords") and "school" in querystring.get("keywords", ""):
@@ -424,10 +478,12 @@ def search_properties_without_address(user_input: str):
         querystring["bathsMax"] = querystring.get("bathsMin")
     elif querystring.get("bathsMax") and not querystring.get("bathsMin"):
         querystring["bathsMin"] = querystring.get("bathsMax")
+
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
     for key, value in querystring.items():
         querystring[key] = str(value)
     print("ARGUMENTS: ", querystring)
+
     headers = {
         "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
         "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
@@ -437,6 +493,7 @@ def search_properties_without_address(user_input: str):
     result = result.json()
     photos = {}
     if "props" not in result:
+
         if querystring.get("keywords"):
             querystring.pop("keywords")
         time.sleep(1.1)
@@ -460,17 +517,26 @@ def search_properties_without_address(user_input: str):
     return {"res": res, "photos": photos}
     
 class Model():
+
     def __init__(self):
         self.max_length = 16_000
-        
+
         class SearchInput(BaseModel):
-            query: str = Field(description="should be an address in similar to this format 18070 Langlois Rd SPACE 212, Desert Hot Springs, CA 92241")
+            query: str = Field(
+                description="should be an address in similar to this format 18070 Langlois Rd SPACE 212, Desert Hot Springs, CA 92241"
+            )
 
         get_house_details_tool = Tool(
             name="Get House Details Tool",
             func=get_house_property,
             description="useful when need to search for info about house, but not about places near it.  The input to this tool should be an address of the house",
-            args_schema = SearchInput
+            args_schema=SearchInput,
+        )
+
+        find_properties_without_address_tool = Tool(
+            name="Find properties without address",
+            func=search_properties_without_address,
+            description="useful when need to find properties and don't have a full address. The input to this tool shoul be user message+address",
         )
 
         find_properties_without_address_tool = Tool(
@@ -486,26 +552,26 @@ class Model():
         )
 
         find_nearby_homes = Tool(
-            name = "Find nearby homes",
-            func = get_info_about_nearby_homes,
-            description = "useful when need to search for info about other houses that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house"
+            name="Find nearby homes",
+            func=get_info_about_nearby_homes,
+            description="useful when need to search for info about other houses with status On Sale, that are listed and located in specific address, but not about places near it.  The input to this tool should be an address of the house",
         )
 
         get_tax_or_price_info = Tool(
-            name = "Get tax or price info",
-            func = get_tax_informatiom,
-            description = "useful when need to search about tax or price history, reductions info about house.  The input to this tool should be an address of the house"
+            name="Get tax or price info",
+            func=get_tax_informatiom,
+            description="useful when need to search about tax or price history, reductions info about house.  The input to this tool should be an address of the house",
         )
-        
+
         google_places = Tool(
-            name = 'google_places',
-            func = google_places_wrapper,
-            description = """A wrapper around Google Places. 
+            name="google_places",
+            func=google_places_wrapper,
+            description="""A wrapper around Google Places. 
         Useful for when you need to find address of some place near property
         discover addressed from ambiguous text or validate address.
-        Input should be a search query."""
+        Input should be a search query.""",
         )
-        
+
 
         
         tools = [get_house_details_tool, find_properties_without_address_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_or_price_info]
@@ -513,17 +579,27 @@ class Model():
         self.memory = ConversationBufferMemory(memory_key="chat_history")
         llm = ChatOpenAI(temperature=0.0,openai_api_key=os.getenv('OPENAI_API_KEY'),max_tokens=512,model="gpt-3.5-turbo-16k")
 
+
         def _handle_error(error) -> str:
-            _,though = str(error).split("Could not parse LLM output:")
+            _, though = str(error).split("Could not parse LLM output:")
             return though
 
-        self.agent_chain = initialize_agent(tools,llm,memory=self.memory,agent="chat-zero-shot-react-description",
-                                            verbose=True,early_stopping_method="generate",max_iterations=4, handle_parsing_errors=_handle_error,
-                                            agent_kwargs={
-        'system_message_prefix':"Answer to the question as best and comprehensively as possible, give a complete answer to the question. Inlude all important information in your Final Answer. You have access to the following tools:",
-    })  
+        self.agent_chain = initialize_agent(
+            tools,
+            llm,
+            memory=self.memory,
+            agent="chat-zero-shot-react-description",
+            verbose=True,
+            early_stopping_method="generate",
+            max_iterations=4,
+            handle_parsing_errors=_handle_error,
+            agent_kwargs={
+                "system_message_prefix": "Answer to the question as best and comprehensively as possible, give a complete answer to the question. Inlude all important information in your Final Answer. You have access to the following tools:",
+            },
+        )
         # self.agent_chain.agent.llm_chain.prompt.messages[0].prompt.template = self.agent_chain.agent.llm_chain.prompt.messages[0].prompt.template.replace('Thought: I now know the final answer','Thought:  I have gathered detailed information to answer the question')
         print("Prompt ", self.agent_chain.agent.llm_chain.prompt.messages)
+
 
     def split_messages(self,text, contact_name):
         """Function to split chat history and return them as two separete lists. Last user message is skipped."""
@@ -533,6 +609,7 @@ class Model():
         for single_sample in text.split(f"{contact_name}:"):
             if single_sample.strip() != '':
                 #skip user message
+
                 if len(single_sample.split("Agent:")) == 2:
                     user_message, ai_message = single_sample.split("Agent:")
                     user_message = user_message.strip()
@@ -540,36 +617,40 @@ class Model():
                     user_messages.append(user_message)
                     ai_messages.append(ai_message)
 
-
         return user_messages, ai_messages
 
-    def add_memory(self,user_messages, ai_messages):
+    def add_memory(self, user_messages, ai_messages):
         """Add memory into LLM agent"""
         # system_prompt = "Please answer as a pirate, add 'Arr' in your messages"
         # self.memory.add_
-        messages = zip(user_messages,ai_messages)
+        messages = zip(user_messages, ai_messages)
         history_length = len(list(messages))
         i = 0
         previous_human_messages = []
         previous_ai_messages = []
+
         for user_message,ai_message in zip(user_messages,ai_messages): 
             #Add only two last messages from AI and USER
             if i >= history_length-3:
+
                 self.memory.chat_memory.add_user_message(user_message)
                 self.memory.chat_memory.add_ai_message(ai_message)
                 previous_human_messages.append(user_message)
                 previous_ai_messages.append(ai_message)
-            i+=1
+            i += 1
         return previous_human_messages, previous_ai_messages
+
         
     async def response(self,user_input,message_history, contact_name):
         """Repsond on user's message"""
         user_messages, ai_messages = self.split_messages(message_history, contact_name)
         previous_human_messages, previous_ai_messages = self.add_memory(user_messages, ai_messages)
         #remove first AI and user message if it doesn't fit into memory
+
         self.clip_context()
-        print("User question: ",user_input)
+        print("User question: ", user_input)
         ai_response = self.agent_chain.run(user_input)
+
         print('Langchain answer ', ai_response)
         print("SELF_MEMORY: ", self.memory)
         print("PREVIOUS_USER: ", previous_human_messages)
@@ -578,6 +659,7 @@ class Model():
 
     def history_add(self, message_history, contact_name):
         print("MESAGE_HISTORY: ", message_history)
+
         user_messages, ai_messages = self.split_messages(message_history, contact_name)
         previous_human_messages, previous_ai_messages = self.add_memory(
             user_messages, ai_messages
@@ -585,16 +667,20 @@ class Model():
         self.clip_context()
         messages = []
         print("PREVIOUS_HUMAN: ", previous_human_messages)
+
         print("PREVIOUS_ai: ", previous_ai_messages)
         if previous_human_messages and previous_ai_messages:
+
             for human_message, ai_message in zip(previous_human_messages, previous_ai_messages):
                 messages.append(HumanMessage(content=human_message))
                 messages.append(AIMessage(content=ai_message))
         return messages
 
+
     def enhance_ai_response(self,user_input,rough_ai_response,previous_human_messages, previous_ai_messages):
         """Additional ChatGPT request to enhance AI response"""
         llm = ChatOpenAI(temperature=0.7,max_tokens=450,model="gpt-3.5-turbo")
+
         messages = [
             SystemMessage(
                 content=f""" You are a friendly, helpful, and supportive real estate agent named Rick. Provide the information below in enhanced format. You should sound like a real human. Do not mention the address in your response, instead use words like "The house", "property", etc. Do not mention the address. If the user's message is something like "I am interested in (address)" just ask what could you help him with. You must not mention the tools that were used to get information.
@@ -610,6 +696,9 @@ class Model():
         if previous_ai_messages:
             messages.append(AIMessage(content=previous_ai_messages[-1]))
         messages.append(HumanMessage(content=user_input))
+        print("MESSAGES: ", messages)
+        print("PREVIOUS_USER: ", previous_human_messages)
+        print("PREVIOUS_AI: ", previous_ai_messages)
         refined_response = llm(messages).content
         # print("PREVIOUS_HUMAN: ", previous_human_messages)
         # print("PREVIOUS_AI: ", previous_ai_messages)
@@ -621,11 +710,17 @@ class Model():
         for message in self.memory.chat_memory.messages:
             total_length += len(message.content)
         return total_length
-    
+
     def clip_context(self):
         while self.get_content_length() > self.max_length:
             self.memory.chat_memory.messages.pop(0)
             self.memory.chat_memory.messages.pop(0)
+
+    def get_summary_of_conversation(self, conversation):
+        llm = ChatOpenAI(temperature=0.0, model="gpt-3.5-turbo-16k")
+        prefix = """Here is client communication with ai agent named Rick, please give the output using the instructions below.Main rule is DO NOT BE REPETITIVE!"""
+        # prefix = """Here is client communication with ai agent named Rick, please give summary of this coversation and provide questions on which AI was not able to answer in this conversation. when AI is unable to answer it usually has "I am sorry", "I apologize", "I don't know" etc. in response. If there are no such questions - please skip this."""
+        sufix = """Follow this instructions when provide output, don't mentioned which instructions you use for formatting: INSTRUCTION_1 = simple short summary (2-3 sentences) of the conversation with client's main requirements and very important things which we need to negotiate in person to make a deal, like mortgage, discount and other very important questions. INSTRUCTION_2 = and key questions on which AI didn't give response during conversation (this question usually has "I am sorry", "I don't know", "I apologize" etc. - write ONLY this questions). INSTRUCTIONS_3 = If there is no information about scheduled appointment such as video call or tour and date and time - dont write about this anything, otherwise provide appointment details. Don't be repetitive. Always use client name at the start. If client name wasn't specified then use "Customer" instead.
 
 
 #    def get_summary_of_conversation(self,conversation):
@@ -662,4 +757,5 @@ DON'T BE REPETITIVE!
         ]
         summary = llm(messages).content
         print("SUMMARY_1: ", summary)
+
         return summary

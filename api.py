@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import re
+
 import aiohttp
 import requests
 import os
@@ -24,12 +25,15 @@ from realtor_tools import (realtor_search_properties_without_address,
 load_dotenv()
 
 # Read an environment variable
+
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 os.environ["GPLACES_API_KEY"] = os.getenv('GPLACES_API_KEY')
+
 
 app = FastAPI()
 
 current_request_task = None
+
 llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-3.5-turbo-16k")
 llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4-1106-preview")
 
@@ -49,6 +53,7 @@ async def send_message_to_ai(request: Request):
         message_history = res['customData'].get('message_history', '')
         email = res.get('email')
         phone = res.get('phone')
+
 
         user_query = f'{user_message} +  I am interested in {address}'
         contact_name = res["customData"]["contact_name"]
@@ -74,10 +79,11 @@ async def send_message_to_ai(request: Request):
 async def get_summary(request:Request):
     chatmodel = Model()
     res = await request.json()
-    email = res.get('email')
-    phone = res.get('phone')
-    message_history = res['customData']['message_history']
+    email = res.get("email")
+    phone = res.get("phone")
+    message_history = res["customData"]["message_history"]
     summary = chatmodel.get_summary_of_conversation(message_history)
+
    # summary = f"{summary}"
     async with aiohttp.ClientSession() as session:
         webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
@@ -86,12 +92,14 @@ async def get_summary(request:Request):
             pass
     return {'summary': summary}
 
+
 @app.post("/get_tax_or_price_info")
 async def get_tax_or_price_info(request: Request):
     chatmodel = Model()
     res = await request.json()
     email = res.get("email")
     phone = res.get("phone")
+
     user_message = res["customData"]["message"]
     address = res["customData"].get("address", "")
     message_history = res["customData"].get("message_history", "")
@@ -101,6 +109,7 @@ async def get_tax_or_price_info(request: Request):
     res = get_tax_informatiom(address)
     messages.append(SystemMessage(
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and available tax information: "{res}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information." Emphasize utilizing tax details from the last two years unless specified otherwise by the user.
             Craft responses in 2-3 sentences that are short, concise, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed.
@@ -112,6 +121,7 @@ async def get_tax_or_price_info(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
+
         async with session.post(webhook_url, json=payload) as response:
             pass
 
@@ -125,11 +135,13 @@ async def google_places(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     address = res["customData"].get("address", "")
+
     user_message = res["customData"]["message"]
     user_query = f"{user_message}, nearby {address}, USA"
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     print("USER_QUERY: ", user_query)
+
     city_state = address.split(",")
     print("FIRST_SPLIT_ADDRESS: ", city_state)
     if len(city_state) > 2:
@@ -137,6 +149,7 @@ async def google_places(request: Request):
     else:
         city_state = city_state[-1]
     result = google_places_wrapper(user_query)
+
     message = [SystemMessage(
         content=f"You are helpful assistant. If {result} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
     query = llm(message).content
@@ -158,6 +171,7 @@ async def google_places(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
+
         async with session.post(webhook_url, json=payload) as response:
             pass
 
@@ -173,6 +187,7 @@ async def find_similar_homes(request: Request):
     address = res["customData"].get("address", "")
     user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
+
     print("USER_QUERY: ", f"{user_message}, {address}")
     contact_name = res["customData"]["contact_name"]
     agent_id = res["customData"].get("agent_id", "")
@@ -191,6 +206,7 @@ async def find_similar_homes(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
+
         async with session.post(webhook_url, json=payload) as response:
             pass
 
@@ -207,6 +223,7 @@ async def find_nearby_homes(request: Request):
     user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
+
     agent_id = res["customData"].get("agent_id", "")
     messages = chatmodel.history_add(message_history, contact_name)
     result = get_info_about_nearby_homes(address, agent_id)
@@ -222,6 +239,7 @@ async def find_nearby_homes(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
+
         async with session.post(webhook_url, json=payload) as response:
             pass
 
@@ -243,6 +261,7 @@ async def find_agent_listings(request: Request):
     if agent_id:
         listings = get_agent_listings(agent_id)
         messages.append(SystemMessage(
+
                 content=f"""This is user message:{user_message}.
                 You have information about real estate agent listings: {listings["res"]}
                 Use this listings and provide 1 option which parameters match the best with User request..
@@ -257,10 +276,12 @@ async def find_agent_listings(request: Request):
 
         if match[0] in listings["photos"]:
             photo_link = listings["photos"][match[0]]
+
     else:
         print("ELSE_OPTION")
         result = await find_properties_without_address_tool(request)
         photo_link = result["photos"]
+
         result = result["bot_response"]
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
@@ -269,6 +290,7 @@ async def find_agent_listings(request: Request):
             pass
 
     return {"bot_response": result, "photo_link": photo_link}
+
 
 
 @app.post("/find_properties_without_address_tool_OLD_VERSION")
@@ -414,7 +436,7 @@ async def find_distance_tool(request: Request):
 
     addresses = addresses_str.split("\n")
     print("ADDRESSES: ", addresses)
-    list_addresses = []
+    list_addresses = []check_matched_properties
     for element in addresses:
         if "Address:" in element:
             list_addresses.append(element)
@@ -588,119 +610,3 @@ async def realtor_get_property_details(request: Request):
 
     return {"bot_response": result}
 
-
-## Send to GHL's GPT
-# def clip_history(message_history,prompt):
-#     max_lenght = 8_000
-#     current_length = len(prompt+message_history)
-#     if current_length > max_lenght:
-#         prompt = prompt
-#         need_to_remove = current_length - max_lenght
-#         message_history = message_history[need_to_remove:]
-#     return message_history
-
-
-# @app.post('/clip_message_history')
-# async def clip_message_history(request:Request):
-#     res = await request.json()
-
-#     message_history = res['customData']['message_history']
-#     prompt = res['customData']['openai_prompt']
-#     print("PROMPT IS",prompt)
-#     email = res.get('email')
-#     phone = res.get('phone')
-#     message_history = clip_history(message_history,prompt)
-#     print('Clipped message : ',message_history)
-#     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/94a02662-1c53-4f5b-8573-a9f412c8d568',json={'prompt':prompt,'message_history' : message_history, 'phone':phone,'email':email})
-    # return {'message_history' : message_history}
-
-## was used with custom webhook
-# basic_prompt = '''If the question is related to specific property information or utilities near that property, please answer yes, otherwise say no. Do not add anything else.
-
-# Examples:
-# User: What is the price of the house?
-# AI: Yes
-
-# User: How can I rent a house?
-# AI: Yes
-
-# User: Are there any clubs near the house?
-# AI: Yes
-
-# User: What is the cost of living there?
-# AI: Yes
-
-# User: How can I address you?
-# AI: No
-
-# User: What is the price of [some address]?
-# AI: Yes
-
-# User: I'm interested in 13151 Cuando Way, Desert Hot Springs, CA 92240
-# AI: No
-
-# User: I'm interested in [address]
-# AI: No
-
-# User: How far away is it?
-# AI: Yes
-
-# Use examples to proceed with this:
-# User: '''
-
-# @app.post('/shouldAskForExtraInfo')
-# async def shouldAskForExtraInfo(request:Request):
-#     res = await request.json()
-#     print('#########')
-#     print(res)
-#     print('#########')
-#     user_message = res['customData']['message']
-
-#     prompt = basic_prompt + user_message + "\n AI:"
-#     address = res['customData']['address']
-#     email = res.get('email')
-#     phone = res.get('phone')
-#     print(address)
-#     result = openai.ChatCompletion.create(
-#             model="gpt-3.5-turbo",
-#             max_tokens=256,
-#             temperature = 0,
-#             messages=[
-#                 {"role": "user", "content": prompt}]
-#             )
-#     answer = result['choices'][0]['message']['content']
-    
-#     if 'yes' in answer.lower():
-#         print('need to ask extra info')
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/08119398-afc3-4d05-9e75-899388717c2b', json = {'message':user_message,'need_extra_info':'True', 'email':email,'phone':phone})
-        
-#         return {'need_extra_info':'True'}
-#     else:
-#         print('No need to ask extra info')
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/08119398-afc3-4d05-9e75-899388717c2b', json = {'message':user_message,'need_extra_info':'False', 'email':email,'phone':phone})
-        
-#         return {'need_extra_info':'False'}
-
-## was used with custom webhook
-# @app.post('/get_address')
-# async def get_address(request:Request):
-#     res = await request.json()
-#     headers = request.headers
-#     print('HEADERS  ', headers)
-#     print(f'{res}')
-#     address_regex = '\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}'
-#     user_message = res['customData']['message']
-#     email = res['email']
-#     phone = res['phone']
-#     print(f'USER MESSAGE {user_message}')
-#     match = re.search(address_regex, user_message)
-    
-#     if match:
-#         print('Address found  ',{'address':match.group()})
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/ddfd4671-13a1-4c55-b370-b7c5fc77dbfe', json = {'message':user_message,'address':match.group(), 'email':email,'phone':phone})
-        
-#         return {'address':match.group(), 'status':200}
-#     else:
-#         print('Address not found  ',user_message)
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/ddfd4671-13a1-4c55-b370-b7c5fc77dbfe', json = {'message':user_message,'address':'not found', 'email':email,'phone':phone})
-#         return {'address':'not found','status':200}
