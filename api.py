@@ -3,103 +3,94 @@ import datetime
 import re
 
 import aiohttp
-import os
-
 import requests
+import os
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import SystemMessage
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
-
+from asyncio import Task
 from ai_model import (Model,
                       get_tax_informatiom,
                       google_places_wrapper,
                       get_info_about_nearby_homes,
                       search_properties_without_address,
-                      get_house_property,
-                      find_distance,
-                      get_info_about_similar_homes, get_agent_listings)
+                      get_house_property, find_distance, get_info_about_similar_homes, get_agent_listings)
 from realtor_tools import (realtor_search_properties_without_address,
                            get_tax_and_price_information_from_realtor,
                            realtor_get_house_details)
+
 
 # Load .env file
 load_dotenv()
 
 # Read an environment variable
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-os.environ["GPLACES_API_KEY"] = os.getenv("GPLACES_API_KEY")
+
+os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
+os.environ["GPLACES_API_KEY"] = os.getenv('GPLACES_API_KEY')
+
 
 app = FastAPI()
 
 current_request_task = None
 
-llm = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-3.5-turbo-16k")
-llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=650, model="gpt-4-1106-preview")
+llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-3.5-turbo-16k")
+llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4-1106-preview")
 
 
-@app.post("/send_message_to_ai")
+@app.post('/send_message_to_ai')
 async def send_message_to_ai(request: Request):
     chatmodel = Model()
-
     global current_request_task
     if current_request_task and not current_request_task.done():
         current_request_task.cancel()
-
     try:
         res = await request.json()
-        print("RESULT_JSON: ", res)
-        user_message = res["customData"]["message"]
-        if "[" in user_message:
-            user_message = user_message.split("[")
-        address = res["customData"].get("address", "")
-        message_history = res["customData"].get("message_history", "")
-        email = res.get("email")
-        phone = res.get("phone")
+        user_message = res['customData']['message']
+        if '[' in user_message:
+            user_message = user_message.split('[')
+        address = res['customData'].get('address', '')
+        message_history = res['customData'].get('message_history', '')
+        email = res.get('email')
+        phone = res.get('phone')
+
+
+        user_query = f'{user_message} +  I am interested in {address}'
         contact_name = res["customData"]["contact_name"]
-
-        user_query = f"{user_message} +  I am interested in {address}"
-
-        current_request_task = asyncio.create_task(
-            chatmodel.response(user_query, message_history, contact_name)
-        )
-
+        current_request_task = asyncio.create_task(chatmodel.response(user_query, message_history, contact_name))
         ai_response = await current_request_task
-
+        # ai_response = current_request_task.result()
         print("BOT_RESPONSE:", ai_response)
-
-        # async with aiohttp.ClientSession() as session:
-        #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        #     payload = {"bot_response": ai_response, "phone": phone, "email": email}
-        #     async with session.post(webhook_url, json=payload, ssl=False) as response:
-        #         pass
-
-        return {"bot_response": ai_response}
-
+        # ai_response = chatmodel.response(user_query, message_history)
+        ## make post request on GHL's inbound webhook
+        async with aiohttp.ClientSession() as session:
+            webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+           #  webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
+            payload = {'bot_response': ai_response, 'phone': phone, 'email': email}
+            async with session.post(webhook_url, json=payload) as response:
+                pass
+        return {'bot_response': ai_response}
     except asyncio.CancelledError:
         pass
-
     finally:
         current_request_task = None
 
-
-@app.post("/get_summary")
-async def get_summary(request: Request):
+@app.post('/get_summary')
+async def get_summary(request:Request):
     chatmodel = Model()
     res = await request.json()
     email = res.get("email")
     phone = res.get("phone")
     message_history = res["customData"]["message_history"]
     summary = chatmodel.get_summary_of_conversation(message_history)
-    # summary = f"{summary}"
-    print(summary)
-    # async with aiohttp.ClientSession() as session:
-    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-    #     payload = {"summary": summary, "phone": phone, "email": email}
-    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
-    #         pass
 
-    return {"summary": summary}
+   # summary = f"{summary}"
+    async with aiohttp.ClientSession() as session:
+        webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
+        payload = {'summary': summary, 'phone': phone, 'email': email}
+        async with session.post(webhook_url, json=payload) as response:
+            pass
+    return {'summary': summary}
 
 
 @app.post("/get_tax_or_price_info")
@@ -108,15 +99,17 @@ async def get_tax_or_price_info(request: Request):
     res = await request.json()
     email = res.get("email")
     phone = res.get("phone")
-    address = res["customData"].get("address", "")
+
     user_message = res["customData"]["message"]
+    address = res["customData"].get("address", "")
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
+
     res = get_tax_informatiom(address)
     messages.append(SystemMessage(
-            content=f"""
-            Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+            content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and available tax information: "{res}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information." Emphasize utilizing tax details from the last two years unless specified otherwise by the user.
             Craft responses in 2-3 sentences that are short, concise, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed.
@@ -128,7 +121,8 @@ async def get_tax_or_price_info(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
@@ -141,10 +135,13 @@ async def google_places(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     address = res["customData"].get("address", "")
-    message_history = res["customData"].get("message_history", "")
+
     user_message = res["customData"]["message"]
-    user_query = f"{user_message}, nearby {address}"
+    user_query = f"{user_message}, nearby {address}, USA"
+    message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
+    print("USER_QUERY: ", user_query)
+
     city_state = address.split(",")
     print("FIRST_SPLIT_ADDRESS: ", city_state)
     if len(city_state) > 2:
@@ -152,23 +149,20 @@ async def google_places(request: Request):
     else:
         city_state = city_state[-1]
     result = google_places_wrapper(user_query)
-    print("USER_QUERY: ", user_query)
-    print("RESULT: ", result)
+
     message = [SystemMessage(
         content=f"You are helpful assistant. If {result} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
     query = llm(message).content
-    print("CHECK if address is same: ", query)
     if "Google Places did not find" in result or query == "Same address":
-        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'")]
+        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'. If there are any specific places in user query, write 'There are any specific places in user query'")]
         query = llm(message).content
-        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}")
-        result = google_places_wrapper(f"{query}, {city_state}")
+        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}, USA")
+        result = google_places_wrapper(f"{query}, {city_state}, USA")
     messages = chatmodel.history_add(message_history, contact_name)
     messages.append(SystemMessage(
-            content=f"""
-            Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+            content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information from google about places: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-            Craft responses that are short, concise, and directly related to the user's inquiry within their message.
+            Craft responses in 2-3 sentences that are short, concise, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
         )
     )
@@ -177,7 +171,8 @@ async def google_places(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
@@ -192,16 +187,18 @@ async def find_similar_homes(request: Request):
     address = res["customData"].get("address", "")
     user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
+
+    print("USER_QUERY: ", f"{user_message}, {address}")
     contact_name = res["customData"]["contact_name"]
-    agent_id = res["customData"]["agent_id"]
+    agent_id = res["customData"].get("agent_id", "")
+    print("CONTACT_NAME: ", contact_name)
     messages = chatmodel.history_add(message_history, contact_name)
     result = get_info_about_similar_homes(address, agent_id)
     messages.append(SystemMessage(
-        content=f"""
-                Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
-                Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about similar houses: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-                Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
-                Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
+        content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+        Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about similar houses: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
+        Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
+        Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
     )
     )
     result = llm(messages).content
@@ -209,7 +206,8 @@ async def find_similar_homes(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
@@ -225,14 +223,14 @@ async def find_nearby_homes(request: Request):
     user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
-    agent_id = res["customData"]["agent_id"]
+
+    agent_id = res["customData"].get("agent_id", "")
     messages = chatmodel.history_add(message_history, contact_name)
     result = get_info_about_nearby_homes(address, agent_id)
     messages.append(SystemMessage(
-            content=f"""
-            Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+            content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about homes nearby: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-            Craft responses that are sort, concise, with links, and directly related to the user's inquiry within their message.
+            Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
         )
     )
@@ -241,7 +239,8 @@ async def find_nearby_homes(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
@@ -255,7 +254,6 @@ async def find_agent_listings(request: Request):
     phone = res.get("phone")
     user_message = res["customData"]["message"]
     agent_id = res["customData"].get("agent_id", "")
-    preferences = res["customData"].get("preferences", "")
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
@@ -263,9 +261,10 @@ async def find_agent_listings(request: Request):
     if agent_id:
         listings = get_agent_listings(agent_id)
         messages.append(SystemMessage(
-                content=f"""This is user message:{user_message} and preferences: {preferences}.
+
+                content=f"""This is user message:{user_message}.
                 You have information about real estate agent listings: {listings["res"]}
-                Use this listings and provide 1 option which parameters match the best with User request.
+                Use this listings and provide 1 option which parameters match the best with User request..
                 If there are no options in the listings that are suitable according to user message, write 'I will send more later'.
                 If you have an option then ask 'do you want something like this?' ant the end"""
             )
@@ -282,16 +281,16 @@ async def find_agent_listings(request: Request):
         print("ELSE_OPTION")
         result = await find_properties_without_address_tool(request)
         photo_link = result["photos"]
-        search_res = result["Search_result"]
-        print("result: ", search_res)
-        result = result["bot_response"]
-    # async with aiohttp.ClientSession() as session:
-    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-    #     payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link}
-    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
-    #         pass
 
-    return {"bot_response": result, "photo_link": photo_link, "Search_result": search_res}
+        result = result["bot_response"]
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link}
+        async with session.post(webhook_url, json=payload) as response:
+            pass
+
+    return {"bot_response": result, "photo_link": photo_link}
+
 
 
 @app.post("/find_properties_without_address_tool_OLD_VERSION")
@@ -301,27 +300,31 @@ async def find_properties_without_address_tool(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     address = res["customData"].get("address", "")
-    preferences = res["customData"].get("preferences", "")
-    message_history = res["customData"].get("message_history", "")
     user_message = res["customData"]["message"]
-    user_query = f"{user_message} +  I am interested in {address}, {preferences}"
+    preferences = res["customData"].get("preferences", "")
+    budget = res["customData"].get("budget", "")
+    user_query = f"{user_message}. {address}, {preferences}, {budget}"
+    message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
+    print("CONTACT_NAME: ", contact_name)
     messages = chatmodel.history_add(message_history, contact_name)
+    address_regex_full = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+    mes_str = [str(element) for element in messages]
+    used_addresses = re.findall(address_regex_full, ", ".join(mes_str))
     result = search_properties_without_address(user_query)
     print("USER_QUERY: ", user_query)
-
     messages.append(SystemMessage(
-            content=f"""You have User message:{user_message}, {preferences}.
-            This is information  about homes:{result["res"]}.
-            Use up to 3 options with base info (such as full address, price, number of bedrooms/bathrooms, living area and) which parameters match the best with User request.
-            Always provide the property url to each property that you use.
-            Use this information to provide a short and concise answer on the User message.
+            content=f"""You have User message:{user_message}, {preferences}, {budget}.
+            This is information about homes:{result["res"]}.
+            If there is information use it to show up to 3 options with base info (such as full address, price, number of bedrooms/bathrooms, property detailUrl without []() markdown format,  living area) which parameters match the best with User request.Don't use options: {used_addresses} that you already show in previous messages.
+            If there is no results in information - just write 'There are no properties with such requirements currently available in our records. Would you like to adjust any of your preferences?',
+             - Never use phrases like 'don't have access to current real estate listings' and don't provide any advices how to get listings or reaching real estates agents.
+
+            Use this rules and information to provide a short and concise answer on the User message.
             Always ask if the lead needs anything else"""
         )
     )
     response = llm_gpt_4(messages).content
-
-    address_regex_full = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
     address_regex_small = "\d+\s[A-Za-z0-9\s]+\,"
     match = re.findall(address_regex_full, response)
     if not match:
@@ -334,24 +337,25 @@ async def find_properties_without_address_tool(request: Request):
     keys_to_remove = []
     for key in photos.keys():
         address = key.split(", ")[0]
-        if not any(address_part[:-1] in address for address_part in addresses_list):
+        if not any(address_part in address for address_part in addresses_list):
             keys_to_remove.append(key)
 
     for key in keys_to_remove:
         del photos[key]
     count = 1
-    test = {}
+    links = {}
     for key, value in photos.items():
-        test[f"Photo link {count}"] = value
+        links[f"Photo link {count}"] = value
         count += 1
-    print("PHOTOS: ", test)
-    # async with aiohttp.ClientSession() as session:
-    #     webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-    #     payload = {"bot_response": result, "phone": phone, "email": email}
-    #     async with session.post(webhook_url, json=payload, ssl=False) as response:
-    #         pass
+    print("PHOTOS: ", links)
 
-    return {"bot_response": response, "photos": test, "Search_result": result["res"]}
+   # async with aiohttp.ClientSession() as session:
+    #    webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+     #   payload = {"bot_response": result, "phone": phone, "email": email}
+      #  async with session.post(webhook_url, json=payload) as response:
+       #     pass
+
+    return {"bot_response": response, "photos": links}
 
 
 @app.post("/get_house_details_tool")
@@ -361,29 +365,30 @@ async def get_house_details_tool(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     user_message = res["customData"]["message"]
-    message_history = res["customData"].get("message_history", "")
     address = res["customData"].get("address", "")
+    message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
+    print("ADDRESS: ", address)
+    print("CONTACT_NAME: ", contact_name)
     messages = chatmodel.history_add(message_history, contact_name)
-    result = get_house_property(address)
-    # photo_link = result["imgSrc"]
 
+    result = get_house_property(address)
+   #  photo_link = result["imgSrc"]
     messages.append(SystemMessage(
-            content=f"""
-            Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+            content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information about this property: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-            Craft responses in 2 - 3 sentences that are short, concise, with detailed url, and directly related to the user's inquiry within their message.
+            Craft responses in 2 - 3 sentences that are short, concise, and directly related to the user's inquiry within their message.
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
 
         )
     )
     result = llm(messages).content
-#     print("MESSAGES: ", messages)
-#     async with aiohttp.ClientSession() as session:
-#         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-#         payload = {"bot_response": result, "phone": phone, "email": email}
-#         async with session.post(webhook_url, json=payload, ssl=False) as response:
-#             pass
+
+    async with aiohttp.ClientSession() as session:
+        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        payload = {"bot_response": result, "phone": phone, "email": email}
+        async with session.post(webhook_url, json=payload) as response:
+            pass
 
     return {"bot_response": result}
 
@@ -395,21 +400,20 @@ async def find_distance_tool(request: Request):
     email = res.get("email")
     phone = res.get("phone")
     address = res["customData"].get("address", "")
-    print("FIRST_PRINT_ADDRESS: ", address)
     address = address.strip()
-    print("SECOND_PRINT_ADDRESS: ", address)
     user_message = res["customData"]["message"]
+    user_query = f"{user_message}, nearby {address}, USA"
+    message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     place_address = res["customData"].get("place_address", "")
-    user_query = f"{user_message}, nearby {address}"
-    message_history = res["customData"].get("message_history", "")
-
+    print("ADDRESS: ", address)
+    print("PLACE_ADDRESS: ", place_address)
     city_state = address.split(",")
     print("FIRST_SPLIT_ADDRESS: ", city_state)
     if len(city_state) > 2:
         city_state = city_state[-2:]
     else:
-        city_state = ""
+        city_state = city_state[-1]
     print("CITY_STATE: ", city_state)
     print("USER_QUERY: ", user_query)
     result_places = google_places_wrapper(user_query)
@@ -418,10 +422,10 @@ async def find_distance_tool(request: Request):
     query = llm(message).content
     print("CHECK if address is same: ", query)
     if "Google Places did not find" in result_places or query == "Same address":
-        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'")]
+        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'. If there are any specific places in user query, write 'There are any specific places in user query'")]
         query = llm(message).content
-        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}")
-        result_places = google_places_wrapper(f"{query}, {city_state}")
+        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}, USA")
+        result_places = google_places_wrapper(f"{query}, {city_state}, USA")
     messages = chatmodel.history_add(message_history, contact_name)
     messages.append(SystemMessage(
             content=f"""You have information from google about places: {result_places}.
@@ -432,7 +436,7 @@ async def find_distance_tool(request: Request):
 
     addresses = addresses_str.split("\n")
     print("ADDRESSES: ", addresses)
-    list_addresses = []
+    list_addresses = []check_matched_properties
     for element in addresses:
         if "Address:" in element:
             list_addresses.append(element)
@@ -450,8 +454,8 @@ async def find_distance_tool(request: Request):
         for element in list_addresses:
             final_addresses += f"|{element}"
         distances_result = find_distance(final_addresses)
-        if distances_result == "Sorry, couldn't find the distance":
-            print("TRIIIIGER")
+        if distances_result == "Sorry, couldn't find the distance" or distances_result == "Ask about name of the location that user interested in":
+            print("TRIGER")
             result_places = google_places_wrapper(place_address)
             messages = [SystemMessage(
                 content=f"""You have information from google about places: {result_places}.
@@ -467,49 +471,47 @@ async def find_distance_tool(request: Request):
                 if "Address:" in element:
                     list_addresses.append(element)
             final_addresses = f"{address}"
-            print("last_check_address_field: ", address)
             for element in list_addresses:
                 final_addresses += f"|{element}"
             distances_result = find_distance(final_addresses)
         messages = chatmodel.history_add(message_history, contact_name)
     print("DISTANCES_RESULT: ", distances_result)
     messages.append(SystemMessage(
-        content=f"""
-        Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
+        content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
         Your main task is provide response to the user's message: "{user_message}", utilize information from google about places: "{result_places}" and information about distances "{distances_result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
-        Craft responses that are short, concise, with links, and directly related to the user's inquiry within their message.
+        Craft responses in 2 - 3 sentences that are short, concise, with links, and directly related to the user's inquiry within their message.
         Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
     ))
     result = llm_gpt_4(messages).content
-    print("MESSAGES: ", messages)
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+        async with session.post(webhook_url, json=payload) as response:
             pass
+
     return {"bot_response": result}
+
+
 
 
 LOG_FILE = "logfile.txt"
 
 
-@app.post("/test_webhook")
+@app.post('/test_webhook')
 async def test_webhook(request: Request):
     try:
         res = await request.json()
-        location = res["location"]
-        print("WEBHOOK_RES", res)
-        message = res["customData"]["message"]
+        marker = res.get("name")
+        location = res.get("workflow")
+        message_history = res["customData"]["message"]
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        log_message = (
-            f"{timestamp} - Location: {location} - Message History: {message}\n"
-        )
+        log_message = f"{timestamp} - Marker:{marker} - Location: {location} - Message History: {message_history} - {res}\n"
 
         with open(LOG_FILE, "a") as file:
             file.write(log_message)
 
-        print(timestamp, location, message)
+        print(log_message)
 
         return {"status": "success"}
     except Exception as e:
@@ -533,14 +535,14 @@ async def realtor_get_tax_or_price_info(request: Request):
             This property located at: {address}.
             You have information about taxes: {result}.
             Use this information to provide a concise answer on the User message.
-            Always ask if the lead needs anything else"""
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
@@ -552,9 +554,9 @@ async def realtor_get_property_without_address(request: Request):
     res = await request.json()
     email = res.get("email")
     phone = res.get("phone")
+    user_message = res["customData"]["message"]
     address = res["customData"].get("address", "")
     message_history = res["customData"].get("message_history", "")
-    user_message = res["customData"]["message"]
     user_query = f"{user_message} + {address}"
     contact_name = res["customData"]["contact_name"]
     messages = chatmodel.history_add(message_history, contact_name)
@@ -563,7 +565,7 @@ async def realtor_get_property_without_address(request: Request):
             content=f"""You have User message:{user_message}.
             This is information about homes:{result}.
             Use this information to provide a concise answer on the User message
-            Always ask if the lead needs anything else"""
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
@@ -571,7 +573,7 @@ async def realtor_get_property_without_address(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
@@ -595,7 +597,7 @@ async def realtor_get_property_details(request: Request):
             Property located at {address}.
             You have information about this property:{result}.
             Use this information to provide a concise answer on the User message.
-            Always ask if the lead needs anything else"""
+            Always ask if lead need anything else"""
         )
     )
     result = llm(messages).content
@@ -603,137 +605,8 @@ async def realtor_get_property_details(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
-        async with session.post(webhook_url, json=payload, ssl=False) as response:
+        async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
 
-
-# @app.post("/summary_counter")
-# async def summary_counter(request: Request):
-#     res = await request.json()
-#     counter = res.get("summary_check")
-#     counter += 1
-#     res["summary_check"] = counter
-
-
-# async with aiohttp.ClientSession() as session:
-#     webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
-#     payload = {'bot_response': ai_response, 'phone': phone, 'email': email}
-#     async with session.post(webhook_url, json=payload, ssl=False) as response:
-#         pass
-
-## Send to GHL's GPT
-# def clip_history(message_history,prompt):
-#     max_lenght = 8_000
-#     current_length = len(prompt+message_history)
-#     if current_length > max_lenght:
-#         prompt = prompt
-#         need_to_remove = current_length - max_lenght
-#         message_history = message_history[need_to_remove:]
-#     return message_history
-
-# @app.post('/clip_message_history')
-# async def clip_message_history(request:Request):
-#     res = await request.json()
-
-#     message_history = res['customData']['message_history']
-#     prompt = res['customData']['openai_prompt']
-#     print("PROMPT IS",prompt)
-#     email = res.get('email')
-#     phone = res.get('phone')
-#     message_history = clip_history(message_history,prompt)
-#     print('Clipped message : ',message_history)
-#     requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c',json={'prompt':prompt,'message_history' : message_history, 'phone':phone,'email':email})
-# return {'message_history' : message_history}
-
-## was used with custom webhook
-# basic_prompt = '''If the question is related to specific property information or utilities near that property, please answer yes, otherwise say no. Do not add anything else.
-
-# Examples:
-# User: What is the price of the house?
-# AI: Yes
-
-# User: How can I rent a house?
-# AI: Yes
-
-# User: Are there any clubs near the house?
-# AI: Yes
-
-# User: What is the cost of living there?
-# AI: Yes
-
-# User: How can I address you?
-# AI: No
-
-# User: What is the price of [some address]?
-# AI: Yes
-
-# User: I'm interested in 13151 Cuando Way, Desert Hot Springs, CA 92240
-# AI: No
-
-# User: I'm interested in [address]
-# AI: No
-
-# User: How far away is it?
-# AI: Yes
-
-# Use examples to proceed with this:
-# User: '''
-
-# @app.post('/shouldAskForExtraInfo')
-# async def shouldAskForExtraInfo(request:Request):
-#     res = await request.json()
-#     print('#########')
-#     print(res)
-#     print('#########')
-#     user_message = res['customData']['message']
-
-#     prompt = basic_prompt + user_message + "\n AI:"
-#     address = res['customData']['address']
-#     email = res.get('email')
-#     phone = res.get('phone')
-#     print(address)
-#     result = openai.ChatCompletion.create(
-#             model="gpt-3.5-turbo",
-#             max_tokens=256,
-#             temperature = 0,
-#             messages=[
-#                 {"role": "user", "content": prompt}]
-#             )
-#     answer = result['choices'][0]['message']['content']
-
-#     if 'yes' in answer.lower():
-#         print('need to ask extra info')
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'need_extra_info':'True', 'email':email,'phone':phone})
-
-#         return {'need_extra_info':'True'}
-#     else:
-#         print('No need to ask extra info')
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'need_extra_info':'False', 'email':email,'phone':phone})
-
-#         return {'need_extra_info':'False'}
-
-## was used with custom webhook
-# @app.post('/get_address')
-# async def get_address(request:Request):
-#     res = await request.json()
-#     headers = request.headers
-#     print('HEADERS  ', headers)
-#     print(f'{res}')
-#     address_regex = '\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}'
-#     user_message = res['customData']['message']
-#     email = res['email']
-#     phone = res['phone']
-#     print(f'USER MESSAGE {user_message}')
-#     match = re.search(address_regex, user_message)
-
-#     if match:
-#         print('Address found  ',{'address':match.group()})
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'address':match.group(), 'email':email,'phone':phone})
-
-#         return {'address':match.group(), 'status':200}
-#     else:
-#         print('Address not found  ',user_message)
-#         requests.post('https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c', json = {'message':user_message,'address':'not found', 'email':email,'phone':phone})
-#         return {'address':'not found','status':200}
