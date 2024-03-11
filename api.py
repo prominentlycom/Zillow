@@ -436,7 +436,7 @@ async def find_distance_tool(request: Request):
 
     addresses = addresses_str.split("\n")
     print("ADDRESSES: ", addresses)
-    list_addresses = []check_matched_properties
+    list_addresses = []
     for element in addresses:
         if "Address:" in element:
             list_addresses.append(element)
