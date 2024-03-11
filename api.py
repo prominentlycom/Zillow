@@ -19,6 +19,7 @@ from ai_model import (Model,
 from realtor_tools import (realtor_search_properties_without_address,
                            get_tax_and_price_information_from_realtor,
                            realtor_get_house_details)
+from utils import add_distance_to_google_places
 
 
 # Load .env file
@@ -158,6 +159,8 @@ async def google_places(request: Request):
         query = llm(message).content
         print("PARAPHRASED_QUERY: ", f"{query}, {city_state}, USA")
         result = google_places_wrapper(f"{query}, {city_state}, USA")
+
+    result = add_distance_to_google_places(result,address)
     messages = chatmodel.history_add(message_history, contact_name)
     messages.append(SystemMessage(
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
@@ -436,7 +439,7 @@ async def find_distance_tool(request: Request):
 
     addresses = addresses_str.split("\n")
     print("ADDRESSES: ", addresses)
-    list_addresses = []check_matched_properties
+    list_addresses = []
     for element in addresses:
         if "Address:" in element:
             list_addresses.append(element)
