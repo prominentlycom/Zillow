@@ -334,6 +334,8 @@ def get_info_about_similar_homes(location: str, agent_id=None):
     zpid = find_zpid(location)
     if zpid == "Sorry, could you please give full address":
         return zpid
+    time.sleep(1.5)
+
     url = "https://zillow-com1.p.rapidapi.com/similarProperty"
 
     querystring = {"zpid": zpid}
@@ -346,12 +348,7 @@ def get_info_about_similar_homes(location: str, agent_id=None):
     response = requests.get(url, headers=headers, params=querystring)
     result = response.json()
     if agent_id:
-        res = 
-        
-        
-        
-        
-        (agent_id, result)
+        res = check_matched_properties(agent_id, result)
         return res
     return result
 
@@ -716,29 +713,7 @@ class Model():
             self.memory.chat_memory.messages.pop(0)
             self.memory.chat_memory.messages.pop(0)
 
-    def get_summary_of_conversation(self, conversation):
-        llm = ChatOpenAI(temperature=0.0, model="gpt-3.5-turbo-16k")
-        prefix = """Here is client communication with ai agent named Rick, please give the output using the instructions below.Main rule is DO NOT BE REPETITIVE!"""
-        # prefix = """Here is client communication with ai agent named Rick, please give summary of this coversation and provide questions on which AI was not able to answer in this conversation. when AI is unable to answer it usually has "I am sorry", "I apologize", "I don't know" etc. in response. If there are no such questions - please skip this."""
-        sufix = """Follow this instructions when provide output, don't mentioned which instructions you use for formatting: INSTRUCTION_1 = simple short summary (2-3 sentences) of the conversation with client's main requirements and very important things which we need to negotiate in person to make a deal, like mortgage, discount and other very important questions. INSTRUCTION_2 = and key questions on which AI didn't give response during conversation (this question usually has "I am sorry", "I don't know", "I apologize" etc. - write ONLY this questions). INSTRUCTIONS_3 = If there is no information about scheduled appointment such as video call or tour and date and time - dont write about this anything, otherwise provide appointment details. Don't be repetitive. Always use client name at the start. If client name wasn't specified then use "Customer" instead.
 
-
-#    def get_summary_of_conversation(self,conversation):
-#        llm = ChatOpenAI(temperature=0.0,model="gpt-3.5-turbo-16k")
-#        prefix = """Here is client communication with ai, please give question on which AI was not able to answer, usually when AI is unable to answer it usually has "I am sorry", "I apologize" etc. in response."""
-#        sufix = """As output please provide only questions on which AI didn't give repsonse during conversation. Do not provide questions that were answered in other messages.
-# Provide output in format
-# User question on which AI didn't answer: 
-# 1. question
-# 2. question
-# """
-#        conversation = conversation[:self.max_tokens]
-#        prompt = f'{prefix} \n {conversation} \n {sufix}'
-#        messages =[
-#            HumanMessage(content = prompt)
-#        ]
-#        summary = llm(messages).content
-#        return summary
     def get_summary_of_conversation(self,conversation):
         llm = ChatOpenAI(temperature=0.0,model="gpt-3.5-turbo-16k")
         prefix = """Here is client communication with ai agent named Rick, please give the output using the instructions below.Main rule is DO NOT BE REPETITIVE!"""
