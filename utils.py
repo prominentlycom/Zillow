@@ -2,6 +2,7 @@ import re
 import googlemaps
 import os
 from dotenv import load_dotenv
+from googleplaces import GooglePlaces, types, lang
 
 # Load .env file
 load_dotenv()
@@ -44,3 +45,27 @@ def calculate_distance_between_addresses(address1 : str, address2 : str):
             return "Ask about name of the location that user interested in"
         res = f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the car travel time is {duration}"
         return res
+
+def get_nearby_places(keyword : str, address: str):
+    """
+    Google maps nearby search.
+
+    keyword (str) : place that is searched, i.e school, hospital, dunkin 
+    address (str) : address where place from keyword is searched
+    """
+    google_places = GooglePlaces(os.getenv('GPLACES_API_KEY'))
+
+    #radius in meters ~ 30 miles
+    query_result = google_places.nearby_search(
+            location=address, keyword=keyword,
+            radius=48280.3)
+
+    # if len(query_result.raw_response['results']) == 0:
+    #     return "Didn't find an"
+    response = ""
+    for i in range(len(query_result.raw_response['results'])):
+        response += f""" {i+1}. {query_result.raw_response['results'][i]['name']}
+Address : {query_result.raw_response['results'][i]['vicinity']}
+
+"""
+    return response
