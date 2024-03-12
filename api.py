@@ -149,13 +149,13 @@ async def google_places(request: Request):
         city_state = city_state[-2:]
     else:
         city_state = city_state[-1]
-    result = google_places_wrapper(user_query)
+    # result = google_places_wrapper(user_query)
 
-    message = [SystemMessage(
-        content=f"You are helpful assistant. If {result} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
-    query = llm(message).content
-    if "Google Places did not find" in result or query == "Same address":
-        message = [HumanMessage(content=f"""You are helpful assistant. Your aim is to extract specific places from user query. 
+    # message = [SystemMessage(
+    #     content=f"You are helpful assistant. If {result} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
+    # query = llm(message).content
+    # if "Google Places did not find" in result or query == "Same address":
+    message = [HumanMessage(content=f"""You are helpful assistant. Your aim is to extract specific places from user query. 
 If there are any specific places in user query, write 'There are no specific places in user query'
 
 Example 1: 
@@ -174,9 +174,9 @@ Proceed with this:
 User : {user_message}
 Assistant : 
 """)]
-        query = llm(message).content
-        print("PARAPHRASED_QUERY: ", f"{query}, {city_state}, USA")
-        result = google_places_wrapper(f"{query}, {city_state}, USA")
+    query = llm(message).content
+    print("PARAPHRASED_QUERY: ", f"{query} near {address}")
+    result = google_places_wrapper(f"{query} near {address}")
 
     result = add_distance_to_google_places(result,address)
     print(result)
