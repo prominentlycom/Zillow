@@ -70,6 +70,7 @@ def get_nearby_places(keyword : str, address: str):
         print(f"fallback option didn't find any results")
         raise Exception("Couldn't find %s near %s" % (keyword,address))
 
+
     response = ""
     for i in range(min(len(query_result.raw_response['results']),3)):
         place = f""" {i+1}. {query_result.raw_response['results'][i]['name']}
