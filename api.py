@@ -179,6 +179,7 @@ Assistant :
         result = google_places_wrapper(f"{query}, {city_state}, USA")
 
     result = add_distance_to_google_places(result,address)
+    print(result)
     messages = chatmodel.history_add(message_history, contact_name)
     messages.append(SystemMessage(
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
