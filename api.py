@@ -178,7 +178,17 @@ Assistant :
     print("PARAPHRASED_QUERY: ", f"{query} near {address}")
     #change to google nearby search
     # result = google_places_wrapper(f"{query} near {address}")
-    result = get_nearby_places(query,address)
+    try :
+        result = get_nearby_places(query,address)
+    except :
+        result = f"Sorry, I was not able to find {query} near {address} within 30 miles."
+        async with aiohttp.ClientSession() as session:
+            webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+            payload = {"bot_response": result, "phone": phone, "email": email}
+
+            async with session.post(webhook_url, json=payload) as response:
+                pass
+        return {"bot_response": result}
     result = add_distance_to_google_places(result,address)
     print(result)
     messages = chatmodel.history_add(message_history, contact_name)

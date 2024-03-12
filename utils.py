@@ -60,12 +60,13 @@ def get_nearby_places(keyword : str, address: str):
             location=address, keyword=keyword,
             radius=48280.3)
 
-    # if len(query_result.raw_response['results']) == 0:
-    #     return "Didn't find an"
+    if len(query_result.raw_response['results']) == 0:
+        raise Exception("Couldn't find %s near %s" % (keyword,address))
+    
     response = ""
-    for i in range(len(query_result.raw_response['results'])):
+    for i in range(min(len(query_result.raw_response['results']),3)):
         response += f""" {i+1}. {query_result.raw_response['results'][i]['name']}
-Address : {query_result.raw_response['results'][i]['vicinity']}
+Address: {query_result.raw_response['results'][i]['vicinity']}
 
 """
     return response
