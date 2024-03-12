@@ -1,4 +1,5 @@
 import re
+from ai_model import google_places_wrapper
 import googlemaps
 import os
 from dotenv import load_dotenv
@@ -60,7 +61,11 @@ def get_nearby_places(keyword : str, address: str):
             location=address, keyword=keyword,
             radius=48280.3)
 
+    ## fallback option
     if len(query_result.raw_response['results']) == 0:
+        result = google_places_wrapper(f"{keyword} near {address}")
+
+    if 'Google Places did not find any places that match the description' in result:
         raise Exception("Couldn't find %s near %s" % (keyword,address))
     
     response = ""
