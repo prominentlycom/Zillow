@@ -66,9 +66,11 @@ def get_nearby_places(keyword : str, address: str):
         print(f"nearby_search didn't find places for {keyword} near {address}")
         result = google_places_wrapper(f"{keyword} near {address}")
 
+
         if 'Google Places did not find any places that match the description' in result:
             print(f"fallback option didn't find any results")
             raise Exception("Couldn't find %s near %s" % (keyword,address))
+
 
     response = ""
     for i in range(min(len(query_result.raw_response['results']),3)):
