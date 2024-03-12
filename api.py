@@ -6,7 +6,7 @@ import aiohttp
 import requests
 import os
 from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage
+from langchain.schema import SystemMessage, HumanMessage
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from asyncio import Task
@@ -155,7 +155,25 @@ async def google_places(request: Request):
         content=f"You are helpful assistant. If {result} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
     query = llm(message).content
     if "Google Places did not find" in result or query == "Same address":
-        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'. If there are any specific places in user query, write 'There are any specific places in user query'")]
+        message = [HumanMessage(content=f"""You are helpful assistant. Your aim is to extract specific places from user query. 
+If there are any specific places in user query, write 'There are no specific places in user query'
+
+Example 1: 
+User: 'I want to know if there is the Angel Stadium nearby?' 
+Assistant: Angel Stadium
+
+Example 2 : 
+User: 'Is the house close to any high schools?'
+Assistant: high schools
+
+Example 3: 
+User: Hello 
+Assistant: There are no specific places in user query
+
+Proceed with this: 
+User : {user_message}
+Assistant : 
+""")]
         query = llm(message).content
         print("PARAPHRASED_QUERY: ", f"{query}, {city_state}, USA")
         result = google_places_wrapper(f"{query}, {city_state}, USA")
@@ -425,7 +443,26 @@ async def find_distance_tool(request: Request):
     query = llm(message).content
     print("CHECK if address is same: ", query)
     if "Google Places did not find" in result_places or query == "Same address":
-        message = [SystemMessage(content=f"You are helpful assistant. Please extract specific places from this search query:{user_message}. Examples: 1. User: 'I want to know if there is the Angel Stadium nearby?' Assistant: 'Angel Stadium' 2. User: 'Is the house close to any high schools?' Assistant: 'high schools'. If there are any specific places in user query, write 'There are any specific places in user query'")]
+        message = [HumanMessage(content=f"""
+You are helpful assistant. Your aim is to extract specific places from user query. 
+If there are any specific places in user query, write 'There are no specific places in user query'
+
+Example 1: 
+User: 'I want to know if there is the Angel Stadium nearby?' 
+Assistant: Angel Stadium
+
+Example 2 : 
+User: 'Is the house close to any high schools?'
+Assistant: high schools
+
+Example 3: 
+User: Hello 
+Assistant: There are no specific places in user query
+
+Proceed with this: 
+User : {user_message}
+Assistant : 
+""")]
         query = llm(message).content
         print("PARAPHRASED_QUERY: ", f"{query}, {city_state}, USA")
         result_places = google_places_wrapper(f"{query}, {city_state}, USA")
