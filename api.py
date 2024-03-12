@@ -19,7 +19,7 @@ from ai_model import (Model,
 from realtor_tools import (realtor_search_properties_without_address,
                            get_tax_and_price_information_from_realtor,
                            realtor_get_house_details)
-from utils import add_distance_to_google_places
+from utils import add_distance_to_google_places,get_nearby_places
 
 
 # Load .env file
@@ -176,8 +176,9 @@ Assistant :
 """)]
     query = llm(message).content
     print("PARAPHRASED_QUERY: ", f"{query} near {address}")
-    result = google_places_wrapper(f"{query} near {address}")
-
+    #change to google nearby search
+    # result = google_places_wrapper(f"{query} near {address}")
+    result = get_nearby_places(query,address)
     result = add_distance_to_google_places(result,address)
     print(result)
     messages = chatmodel.history_add(message_history, contact_name)
