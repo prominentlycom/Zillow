@@ -170,6 +170,11 @@ Example 3:
 User: Hello 
 Assistant: There are no specific places in user query
 
+Example 4: 
+User: Are there any shops? 
+Assistant: shops
+
+
 Proceed with this: 
 User : {user_message}
 Assistant : 
