@@ -185,7 +185,8 @@ Assistant :
     # result = google_places_wrapper(f"{query} near {address}")
     try :
         result = get_nearby_places(query,address)
-    except :
+    except Exception as e:
+        print(f"During get_nearby_places the following error occured :{str(e)}")
         result = f"Sorry, I was not able to find {query} near {address} within 30 miles."
         async with aiohttp.ClientSession() as session:
             webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
