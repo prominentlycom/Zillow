@@ -140,7 +140,8 @@ async def google_places(request: Request):
     address = res["customData"].get("address", "")
 
     user_message = res["customData"]["message"]
-    user_query = f"{user_message}, nearby {address}, USA"
+    # updated user information query from nearby to near for better context
+    user_query = f"{user_message}, near {address}, USA"
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
     print("USER_QUERY: ", user_query)
@@ -157,6 +158,13 @@ async def google_places(request: Request):
     #     content=f"You are helpful assistant. If {result} is the same with full address: {address} - write 'Same address', otherwise write - 'Not same address'")]
     # query = llm(message).content
     # if "Google Places did not find" in result or query == "Same address":
+    #  As a helpful assistant, your goal is to identify specific places from the user's query. 
+    # If there are any specific places mentioned, provide their names. Otherwise, respond with 'There are no specific places mentioned'.
+    # Example 4: 
+    # User: 'Are there any museums in the area?' 
+    # Assistant: Museums
+    # Now, let's continue:
+         
     message = [HumanMessage(content=f"""You are helpful assistant. Your aim is to extract specific places from user query. 
 If there are any specific places in user query, write 'There are no specific places in user query'
 
@@ -177,7 +185,6 @@ User: Are there any shops?
 Assistant: shops
 
 
-Proceed with this: 
 User : {user_message}
 Assistant : 
 """)]
@@ -201,6 +208,10 @@ Assistant :
     result = add_distance_to_google_places(result,address)
     print(result)
     messages = chatmodel.history_add(message_history, contact_name)
+        # Your role is to provide assistance with a human touch, similar to a supportive companion aiding a real estate agent. Aim to maintain a conversational and friendly tone.
+        # Your primary task is to respond to the user's message: "{user_message}", considering the property details: "{address}" and information about nearby places: "{result}". Begin with a friendly note, mentioning the source of the data without using the phrase "Based on available information."
+        # Craft responses in 2-3 sentences that are concise, directly addressing the user's inquiry, and maintaining a welcoming atmosphere.
+        # Always invite further questions or offer additional assistance.
     messages.append(SystemMessage(
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information from google about places: "{result}". Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
