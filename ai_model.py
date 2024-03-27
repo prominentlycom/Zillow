@@ -253,8 +253,8 @@ def get_house_property(
     """Tool that uses Zillow api to get house properties given adress of the house.Use case answer on questions related to the house. Valid params include "location":"location"."""
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
-
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"get_house_property": result}
         requests.post(webhook_url, json=payload)
 

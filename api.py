@@ -65,8 +65,9 @@ async def send_message_to_ai(request: Request):
         # ai_response = chatmodel.response(user_query, message_history)
         ## make post request on GHL's inbound webhook
         async with aiohttp.ClientSession() as session:
-            webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-           #  webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
+            webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+            #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+            #webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
             payload = {'bot_response': ai_response, 'phone': phone, 'email': email}
             async with session.post(webhook_url, json=payload) as response:
                 pass
@@ -120,7 +121,8 @@ async def get_tax_or_price_info(request: Request):
     result = llm(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
 
         async with session.post(webhook_url, json=payload) as response:
@@ -189,7 +191,8 @@ Assistant :
         print(f"During get_nearby_places the following error occured :{str(e)}")
         result = f"Sorry, I was not able to find {query} near {address} within 30 miles."
         async with aiohttp.ClientSession() as session:
-            webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+            webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+            #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
             payload = {"bot_response": result, "phone": phone, "email": email}
 
             async with session.post(webhook_url, json=payload) as response:
@@ -208,7 +211,8 @@ Assistant :
     result = llm_gpt_4(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
 
         async with session.post(webhook_url, json=payload) as response:
@@ -243,7 +247,8 @@ async def find_similar_homes(request: Request):
     result = llm(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
 
         async with session.post(webhook_url, json=payload) as response:
@@ -276,7 +281,8 @@ async def find_nearby_homes(request: Request):
     result = llm(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
 
         async with session.post(webhook_url, json=payload) as response:
@@ -323,7 +329,8 @@ async def find_agent_listings(request: Request):
 
         result = result["bot_response"]
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link}
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -424,7 +431,8 @@ async def get_house_details_tool(request: Request):
     result = llm(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -542,7 +550,8 @@ Assistant :
     ))
     result = llm_gpt_4(messages).content
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -598,7 +607,8 @@ async def realtor_get_tax_or_price_info(request: Request):
     )
     result = llm(messages).content
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -629,7 +639,8 @@ async def realtor_get_property_without_address(request: Request):
     result = llm(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -661,7 +672,8 @@ async def realtor_get_property_details(request: Request):
     result = llm(messages).content
 
     async with aiohttp.ClientSession() as session:
-        webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
+        webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
         payload = {"bot_response": result, "phone": phone, "email": email}
         async with session.post(webhook_url, json=payload) as response:
             pass
