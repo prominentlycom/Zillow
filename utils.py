@@ -55,30 +55,38 @@ def get_nearby_places(keyword : str, address: str):
     address (str) : address where place from keyword is searched
     """
     google_places = GooglePlaces(os.getenv('GPLACES_API_KEY'))
-
-    #radius in meters ~ 30 miles
-    query_result = google_places.nearby_search(
-            location=address, keyword=keyword,
-            radius=48280.3)
-
-    ## fallback option
-    if len(query_result.raw_response['results']) == 0:
-        print(f"nearby_search didn't find places for {keyword} near {address}")
-        result = google_places_wrapper(f"{keyword} near {address}")
-
-
-        if 'Google Places did not find any places that match the description' in result:
-            print(f"fallback option didn't find any results")
-            raise Exception("Couldn't find %s near %s" % (keyword,address))
-
-
+    # start with a small radius before making the the radius
+    radius = 2  # Initial radius value
+    max_radius = 32  # Maximum radius value
     response = ""
-    for i in range(min(len(query_result.raw_response['results']),3)):
-        place = f""" {i+1}. {query_result.raw_response['results'][i]['name']}
-Address: {query_result.raw_response['results'][i]['vicinity']}
 
-"""
-        print(f'Found several places {place}')
-        
-        response += place
+    while radius <= max_radius:
+        query_result = google_places.nearby_search(
+            location=address, keyword=keyword,
+            radius=radius * 1000, rankby='distance')  # Convert radius to meters, add rankby parameter = distance
+
+        if len(query_result.raw_response['results']) > 0:
+            sorted_results = sorted(query_result.raw_response['results'], key=lambda x: x.get('distance', float('inf')))
+            for i in range(min(len(sorted_results), 5)):
+                place = f""" {i + 1}. {sorted_results[i]['name']}
+                Address: {sorted_results[i]['vicinity']}
+                """
+                print(f'Found several places {place}')
+                response += place
+            break  # Exit loop if places are found within current radius
+        else:
+            print(f"No places found within {radius} m radius")
+            # Fallback option
+            result = google_places_wrapper(f"{keyword} near {address}")
+
+            if 'Google Places did not find any places that match the description' in result:
+                print(f"fallback option didn't find any results")
+                raise Exception("Couldn't find %s near %s" % (keyword,address))
+            
+            radius += 5  # Increment radius if no places are found
+
+    if not response:
+        print(f"No nearby places found for {keyword} near {address}")
+        raise Exception("Couldn't find %s near %s" % (keyword, address))
+
     return response
