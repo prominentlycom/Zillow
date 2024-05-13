@@ -44,7 +44,8 @@ def calculate_distance_between_addresses(address1 : str, address2 : str):
         duration = my_dist['duration']['text']
         if data['destination_addresses'][0] == data['origin_addresses'][0]:
             return "Ask about name of the location that user interested in"
-        res = f"Include this information while answering \n Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the car travel time is {duration}"
+        print(f"Distance from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {distance_km} and the car travel time is {duration}")
+        res = f"Include this information while answering, \n The car travel time from {data['destination_addresses'][0]} to {data['origin_addresses'][0]} is {duration}"
         return res
 
 def get_nearby_places(keyword : str, address: str):
