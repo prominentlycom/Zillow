@@ -229,8 +229,8 @@ def __get_info_about_home_from_zillow(location: str):
 
     headers = {
 
-	"X-RapidAPI-Key": os.getenv('X-RapidAPI-Key'),
-	"X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
+        "X-RapidAPI-Key": os.getenv('X-RapidAPI-Key'),
+        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
 
     }
 
@@ -536,12 +536,6 @@ class Model():
             description="useful when need to find properties and don't have a full address. The input to this tool shoul be user message+address",
         )
 
-        find_properties_without_address_tool = Tool(
-            name="Find properties without address",
-            func=search_properties_without_address,
-            description="useful when need to find properties and don't have a full address. The input to this tool shoul be user message+address",
-        )
-
         find_distance_tool = Tool(
             name="Find distance tool",
             func=find_distance,
@@ -680,7 +674,7 @@ class Model():
 
         messages = [
             SystemMessage(
-                content=f""" You are a friendly, helpful, and supportive real estate agent named Rick. Provide the information below in enhanced format. You should sound like a real human. Do not mention the address in your response, instead use words like "The house", "property", etc. Do not mention the address. If the user's message is something like "I am interested in (address)" just ask what could you help him with. You must not mention the tools that were used to get information.
+                content=f""" You are a friendly, helpful, and supportive real estate agent named Rick. Provide the information below in enhanced format. You should sound like a real human. Do not mention the address in your response, instead use words like "The house", "property", etc. Do not mention the address. If the user's message is something like "I am interested in (address)" just ask what could you help him with. You must mention the tools that were used to get information.
                 Below is the answer to the user question, use it only when it is related to the user question, you may modify it, but keep the meaning:
                 {rough_ai_response} """
             )
