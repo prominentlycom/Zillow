@@ -228,7 +228,7 @@ Assistant :
             Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
         )
     )
-    result = llm(messages).content
+    result = llm_gpt_4(messages).content
 
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
@@ -569,7 +569,7 @@ Assistant :
     content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
     Your main task is to respond to the user's message: "{user_message}", utilizing information from Google about places: "{result_places}" and providing car travel times over distances: "{distances_result}". Begin with a friendly note, mentioning the source of the data without using the phrase "Based on available information." Craft responses in 2-3 sentences that are concise and directly related to the user's inquiry within their message, focusing on car travel times. Always focus on car travel time but If distance is mentioned without car travel time, rephrase it to a more conversational tone, such as "about X miles away. Avoid providing the full address, keeping the conversation friendly and inviting by asking if there's more they'd like to know or if further assistance is needed."""
 ))
-    result = llm(messages).content
+    result = llm_gpt_4(messages).content
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
