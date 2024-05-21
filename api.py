@@ -225,7 +225,7 @@ Assistant :
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
             Your main task is provide response to the user's message: "{user_message}", utilize property details: "{address}" and information from google about places: "{result}". Focus on the car travel time information instead of metric distance. Start with a friendly note, by mentioning the data's source without using the phrase "Based on available information."
             Craft responses in 2-3 sentences that are short, concise, and directly related to the user's inquiry within their message.
-            Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed. Ensure you refrain from offering directions or subsequent or more information about the area, just nearby amenities"""
+            Always keep the conversation inviting by asking if there's more they'd like to know or if further assistance is needed."""
         )
     )
     result = llm_gpt_4(messages).content
