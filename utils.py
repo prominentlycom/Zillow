@@ -68,7 +68,7 @@ def get_nearby_places(keyword : str, address: str):
 
         if len(query_result.raw_response['results']) > 0:
             sorted_results = sorted(query_result.raw_response['results'], key=lambda x: x.get('distance', float('inf')))
-            for i in range(min(len(sorted_results), 5)):
+            for i in range(min(len(sorted_results), 3)):
                 place = f""" {i + 1}. {sorted_results[i]['name']}
                 Address: {sorted_results[i]['vicinity']}
                 """
