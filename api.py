@@ -35,7 +35,7 @@ app = FastAPI()
 
 current_request_task = None
 
-llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-4o")
+llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-3.5-turbo-16k")
 llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4o")
 
 
