@@ -35,8 +35,8 @@ app = FastAPI()
 
 current_request_task = None
 
-llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-3.5-turbo-16k")
-llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4-1106-preview")
+llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-4o")
+llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4o")
 
 
 @app.post('/send_message_to_ai')
