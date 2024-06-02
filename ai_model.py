@@ -10,7 +10,6 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 import googlemaps
-import openai
 from langchain.agents import initialize_agent, Tool
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
@@ -19,15 +18,16 @@ from langchain.tools import GooglePlacesTool
 #from langchain.utilities.google_places_api import GooglePlacesAPIWrapper
 from datetime import datetime
 from custom_google_places import CustomGooglePlacesAPIWrapper
-
+from openai import OpenAI
 
 # Load .env file
 load_dotenv()
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 # Read an environment variable
 os.environ["GPLACES_API_KEY"] =  os.getenv('GPLACES_API_KEY')
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 functions = [
     {
@@ -123,7 +123,7 @@ def get_agent_listings(agent_id: str):
         time.sleep(1.5)
         response = requests.get(url, headers=headers, params=querystring)
 
-        lis = response.json().get("listings")
+        lis = response.json().listings
         if lis:
             all_listings.extend(lis)
         if len(lis) < 10:
@@ -239,7 +239,7 @@ def __get_info_about_home_from_zillow(location: str):
     else:
         raise Exception("Didn't get zpid")
 
-        
+
     time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     print("RESULT: ", result)
@@ -267,7 +267,7 @@ def find_distance(addresses:str) -> str:
     '''Find distance tool, useful when need to find distance between two exact addresses'''
     splitted_addresses = addresses.split('|')
     gmaps = googlemaps.Client(key = os.getenv('GPLACES_API_KEY'))
-    
+
 
     if len(splitted_addresses) == 2:
         address1, address2 = splitted_addresses[0], splitted_addresses[1]
@@ -316,7 +316,7 @@ def find_distance(addresses:str) -> str:
         res = f"Include this information while answering \n{answer}"
         return res
 
-    
+
 def google_places_wrapper(query:str) -> str:
     """ A wrapper around Google Places. 
         Useful for when you need to find address of some place near property
@@ -435,24 +435,22 @@ def get_tax_informatiom(location: str) -> dict:
 
 def search_properties_without_address(user_input: str):
     """Search properties without address tool, useful when need to search properties without specific address"""
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-0613",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are useful assistant"
-            },
-            {
-                "role": "user",
-                "content": f"Here is user input: {user_input}. Please return location and other parameters."
-            }
-        ],
-        functions=functions,
-        function_call={
-            "name": "search_params"
+    response = client.chat.completions.create(model="gpt-3.5-turbo-0613",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are useful assistant"
         },
-    )
-    arguments = response["choices"][0]["message"]["function_call"]["arguments"]
+        {
+            "role": "user",
+            "content": f"Here is user input: {user_input}. Please return location and other parameters."
+        }
+    ],
+    functions=functions,
+    function_call={
+        "name": "search_params"
+    })
+    arguments = response.choices[0].message.function_call.arguments
 
     querystring = json.loads(arguments)
     print("QUERYSTRING: ", querystring)
@@ -475,6 +473,9 @@ def search_properties_without_address(user_input: str):
         querystring["bathsMax"] = querystring.get("bathsMin")
     elif querystring.get("bathsMax") and not querystring.get("bathsMin"):
         querystring["bathsMin"] = querystring.get("bathsMax")
+
+    querystring["bathsMax"] += 2
+    querystring["bedsMax"] += 2
 
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
     for key, value in querystring.items():
@@ -512,7 +513,7 @@ def search_properties_without_address(user_input: str):
             photos[element["address"]] = element["imgSrc"]
         res = f"This is a search result{result}. Show only base info for each house."
     return {"res": res, "photos": photos}
-    
+
 class Model():
 
     def __init__(self):
@@ -564,7 +565,7 @@ class Model():
         )
 
 
-        
+
         tools = [get_house_details_tool, find_properties_without_address_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_or_price_info]
 
         self.memory = ConversationBufferMemory(memory_key="chat_history")
@@ -631,7 +632,7 @@ class Model():
             i += 1
         return previous_human_messages, previous_ai_messages
 
-        
+
     async def response(self,user_input,message_history, contact_name):
         """Repsond on user's message"""
         user_messages, ai_messages = self.split_messages(message_history, contact_name)

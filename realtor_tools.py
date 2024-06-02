@@ -1,8 +1,12 @@
-
 import os
-import openai
+#import openai
 from typing import Optional
 import requests
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY"),
+)
 
 
 functions = [
@@ -150,7 +154,9 @@ def get_tax_and_price_information_from_realtor(location: str) -> dict:
 
 def realtor_search_properties_without_address(user_input: str):
     """Search properties without address tool, useful when need to search properties without specific address"""
-    response = openai.ChatCompletion.create(
+    
+    response = client.chat.completions.create(
+    #response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo-0613",
         messages=[
             {
