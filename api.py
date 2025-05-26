@@ -2,6 +2,9 @@ import asyncio
 import datetime
 import re
 
+from pydantic import BaseModel, Field
+from typing import Optional
+
 import aiohttp
 import requests
 import os
@@ -20,7 +23,7 @@ from realtor_tools import (realtor_search_properties_without_address,
                            get_tax_and_price_information_from_realtor,
                            realtor_get_house_details)
 from utils import add_distance_to_google_places,get_nearby_places
-
+from ghl_api import get_ghl_location_id
 
 # Load .env file
 load_dotenv()
@@ -29,14 +32,33 @@ load_dotenv()
 
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 os.environ["GPLACES_API_KEY"] = os.getenv('GPLACES_API_KEY')
-
+os.environ["GHL_API_KEY"] = os.getenv('GHL_API_KEY')
 
 app = FastAPI()
 
 current_request_task = None
 
-llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-3.5-turbo-16k")
-llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4o")
+llm = ChatOpenAI(temperature=0.7, max_tokens=500, model="gpt-4o-mini")
+llm_gpt_4 = ChatOpenAI(temperature=0.3, max_tokens=500, model="gpt-4o-mini")
+
+
+# Define the schema for the request body
+
+
+# Define the schema for the custom data
+class CustomData(BaseModel):
+    message: str = Field(..., description="The user's message related to the property inquiry")
+    address: Optional[str] = Field("", description="The address of the property being inquired about")
+    message_history: Optional[str] = Field("", description="The previous conversation history with the user")
+    contact_name: str = Field(..., description="The name of the contact person")
+    contact_id: Optional[str] = Field(None, description="The unique ID of the contact, if available")
+    location: Optional[str] = Field(None, description="The location of the property or user, if available")
+
+# Define the schema for the request body
+class RequestBody(BaseModel):
+    email: str = Field(None, description="The email of the user")
+    phone: str = Field(None, description="The phone number of the user")
+    customData: CustomData = Field(..., description="Additional data provided by the user including message, address, and contact details")
 
 
 @app.post('/send_message_to_ai')
@@ -93,11 +115,15 @@ async def get_summary(request:Request):
     phone = res.get("phone")
     message_history = res["customData"]["message_history"]
     summary = chatmodel.get_summary_of_conversation(message_history)
+    
+
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
 
    # summary = f"{summary}"
     async with aiohttp.ClientSession() as session:
         webhook_url = 'https://services.leadconnectorhq.com/hooks/Cr4I5rLHxAhYI19SvpP6/webhook-trigger/f15fe780-1831-47de-8bfd-9241b8ac626c'
-        payload = {'summary': summary, 'phone': phone, 'email': email}
+        payload = {'summary': summary, 'phone': phone, 'email': email, 'location_id': location_id}
         async with session.post(webhook_url, json=payload) as response:
             pass
     return {'summary': summary}
@@ -117,6 +143,9 @@ async def get_tax_or_price_info(request: Request):
     contact_id = res.get("customData").get("contact_id")
     messages = chatmodel.history_add(message_history, contact_name)
 
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
+
     res = get_tax_informatiom(address)
     messages.append(SystemMessage(
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
@@ -132,7 +161,7 @@ async def get_tax_or_price_info(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id}
+        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id, "location_id": location_id}
 
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -155,6 +184,9 @@ async def google_places(request: Request):
     contact_name = res["customData"]["contact_name"]
     print("USER_QUERY: ", user_query)
 
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
+
     city_state = address.split(",")
     print("FIRST_SPLIT_ADDRESS: ", city_state)
     if len(city_state) > 2:
@@ -173,7 +205,19 @@ async def google_places(request: Request):
     # User: 'Are there any museums in the area?' 
     # Assistant: Museums
     # Now, let's continue:
-         
+    if not address:
+        result = (
+            "It seems like I don't have the address. Could you please provide the location you're asking about? "
+            "That way I can find nearby places for you."
+        )
+        async with aiohttp.ClientSession() as session:
+            webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
+            payload = {"bot_response": result, "phone": phone, "email": email, "location_id": location_id}
+
+            async with session.post(webhook_url, json=payload) as response:
+                pass
+        return {"bot_response": result}
+
     message = [HumanMessage(content=f"""You are helpful assistant. Your aim is to extract specific places from user query. 
 If there are any specific places in user query, write 'There are no specific places in user query'
 
@@ -201,15 +245,21 @@ Assistant :
     print("PARAPHRASED_QUERY: ", f"{query} near {address}")
     #change to google nearby search
     # result = google_places_wrapper(f"{query} near {address}")
+    
+    # If no specific place is detected, make a general nearby search
+    if query == "There are no specific places in user query":
+        query = "Popular places, grocery stores/shops or restaurants"
+
     try :
         result = get_nearby_places(query,address)
     except Exception as e:
         print(f"During get_nearby_places the following error occured :{str(e)}")
-        result = f"Sorry, I was not able to find {query} near {address} within 30 miles."
+        #result = f"Sorry, I was not able to find {query} near {address} within 30 miles."
+        result = f"Sorry, I couldn't find anything nearby. Anything else I can help you with {address}?"
         async with aiohttp.ClientSession() as session:
             webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
             #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-            payload = {"bot_response": result, "phone": phone, "email": email}
+            payload = {"bot_response": result, "phone": phone, "email": email, "location_id": location_id}
 
             async with session.post(webhook_url, json=payload) as response:
                 pass
@@ -233,7 +283,7 @@ Assistant :
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
+        payload = {"bot_response": result, "phone": phone, "email": email, "location_id": location_id}
 
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -250,6 +300,8 @@ async def find_similar_homes(request: Request):
     address = res["customData"].get("address", "")
     user_message = res["customData"]["message"]
     message_history = res["customData"].get("message_history", "")
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
 
     print("USER_QUERY: ", f"{user_message}, {address}")
     contact_name = res["customData"]["contact_name"]
@@ -269,7 +321,7 @@ async def find_similar_homes(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
+        payload = {"bot_response": result, "phone": phone, "email": email, "location_id": location_id}
 
         async with session.post(webhook_url, json=payload) as response:
             pass
@@ -288,6 +340,9 @@ async def find_nearby_homes(request: Request):
     message_history = res["customData"].get("message_history", "")
     contact_name = res["customData"]["contact_name"]
 
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
+
     agent_id = res["customData"].get("agent_id", "")
     messages = chatmodel.history_add(message_history, contact_name)
     result = get_info_about_nearby_homes(address, agent_id)
@@ -303,13 +358,12 @@ async def find_nearby_homes(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email}
+        payload = {"bot_response": result, "phone": phone, "email": email, "location_id": location_id}
 
         async with session.post(webhook_url, json=payload) as response:
             pass
 
     return {"bot_response": result}
-
 
 @app.post("/find_properties_without_address_tool")
 async def find_agent_listings(request: Request):
@@ -323,41 +377,106 @@ async def find_agent_listings(request: Request):
     contact_name = res["customData"]["contact_name"]
     contact_id = res.get("customData").get("contact_id")
     messages = chatmodel.history_add(message_history, contact_name)
-    photo_link = ""
+    photo_link = []
+    
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
+
     if agent_id:
         listings = get_agent_listings(agent_id)
-        messages.append(SystemMessage(
+        print("LISTINGS: ", listings)
 
-                content=f"""This is user message:{user_message}.
-                You have information about real estate agent listings: {listings["res"]}
-                Use this listings and provide 1 option which parameters match the best with User request..
-                If there are no options in the listings that are suitable according to user message, write 'I will send more later'.
-                If you have an option then ask 'do you want something like this?' ant the end"""
+        content = f"""This is user message: {user_message}.
+        You have information about real estate agent listings: {listings["res"]}"""
+
+        # Limit the number of results displayed in the message (optional, for improved readability)
+        if len(listings["res"]) > 3:
+            content += "\n**Note:** Only displaying the first 3 results for brevity."
+
+        content += """
+        Use these listings and provide options which parameters match the best with User request.
+        If there are no options in the listings that are suitable according to the user message, write 'I will send more later'.
+        If you have options, ask 'Do you want something like this?' at the end."""
+
+        messages.append(
+            SystemMessage(
+                content=content
+                #     content=f"""This is user message: {user_message}.
+                # You have information about real estate agent listings: {listings["res"]}
+                # Use these listings and provide options which parameters match the best with User request.
+                # If there are no options in the listings that are suitable according to the user message, write 'I will send more later'.
+                # If you have options, ask 'Do you want something like this?' at the end."""
             )
         )
+
         result = llm(messages).content
-        address_regex = "\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+        address_regex = r"\d+\s[\w\s]+(?:St|Rd|Blvd|Ave|Dr|Ct|Ln|Pl|Way|Loop|Sq|Pkwy|Terrace)?(?:\s\w+)*(?:\s#\d+)?\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+        # Remove asterisks from the result
+        result = result.replace("**", "")
+         # Format photo and view listing links
+        #result = re.sub(r'!\[Image\]\((.*?)\)', r'Photo: \1', result)
+        #result = re.sub(r'\[View Listing\]\((.*?)\)', r'View Listing: \1', result)
+        # Ensure "View Photo" and "View Listing" are explicitly labeled
+        result = re.sub(r'!\[.*?\]\((.*?)\)', r'Photo: \1', result)
+        result = re.sub(r'\[.*?\]\((.*?)\)', r'View Listing: \1', result)
+        #address_regex = r"\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+        print("RESULT: ", result)
         match = re.findall(address_regex, result)
-        print("one_address: ", match[0])
+        print("Match: ", match)
 
-        if match[0] in listings["photos"]:
-            photo_link = listings["photos"][match[0]]
+        # Cap the results to 3
+        match = match[:3]
+        print("Capped Matches: ", match)
+        for address in match:
+            if address in listings["photos"]:
+                photo_link.append(listings["photos"][address])
+                print("photo links: ", photo_link)
+        #if match[0] in listings["photos"]:
+         #  photo_link = listings["photos"][match[0]]
 
+        #address_regex = r"\d+\s[A-Za-z0-9\s]+\,\s[A-Za-z\s]+\,\s[A-Z]{2}\s\d{5}"
+        #print("RESULT: ", result)
+        #matches = re.findall(address_regex, result)
+        #print("MATCHES: ", matches)
+
+        #matched_addresses = []
+        #for address in matches:
+        #    if address in listings.get("photos", {}):
+        #        matched_addresses.append(address)
+        #        photo_link.append(listings["photos"][address])
+
+        #if matched_addresses:
+         #   matched_addresses_str = "\n".join(matched_addresses)
+          #  print("Matched addresses:")
+           # for address in matched_addresses:
+            #    print(address)
+            #result = f"Here are the closely matched addresses:\n{matched_addresses_str}\nDo you want something like this?"
+        #else:
+         #   result = "No address matched in the response. I will send more later."
     else:
         print("ELSE_OPTION")
         result = await find_properties_without_address_tool(request)
-        photo_link = result["photos"]
+        photo_link = result.get("photos", [])
+        result = result.get("bot_response", "")
 
-        result = result["bot_response"]
+    #photo_link_str = ", ".join(photo_link)
+    photo_link_collection = {
+                f"photo link {i + 1}": photo_link[i] for i in range(len(photo_link))
+            }
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
-        #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email, "photo_link": photo_link, "contact_id": contact_id}
+        payload = {
+            "bot_response": result,
+            "phone": phone,
+            "email": email,
+            "photo_link": photo_link_collection,
+            "contact_id": contact_id,
+            "location_id": location_id
+        }
         async with session.post(webhook_url, json=payload) as response:
             pass
 
-    return {"bot_response": result, "photo_link": photo_link}
-
+    return {"bot_response": result, "photo_link": photo_link_collection}
 
 
 @app.post("/find_properties_without_address_tool_OLD_VERSION")
@@ -426,7 +545,7 @@ async def find_properties_without_address_tool(request: Request):
 
 
 @app.post("/get_house_details_tool")
-async def get_house_details_tool(request: Request):
+async def get_house_details_tool(request: Request, request_body: RequestBody):
     chatmodel = Model()
     res = await request.json()
     email = res.get("email")
@@ -438,9 +557,12 @@ async def get_house_details_tool(request: Request):
     contact_id = res.get("customData").get("contact_id")
     print("ADDRESS: ", address)
     print("CONTACT_NAME: ", contact_name)
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
     messages = chatmodel.history_add(message_history, contact_name)
 
     result = get_house_property(address)
+
    #  photo_link = result["imgSrc"]
     messages.append(SystemMessage(
             content=f"""Your role is to provide assistance with a human touch, akin to a helpful companion supporting a real estate agent. Aim for a conversational and friendly tone.
@@ -455,7 +577,7 @@ async def get_house_details_tool(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id}
+        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id, "location_id": location_id}
         async with session.post(webhook_url, json=payload) as response:
             pass
 
@@ -463,7 +585,7 @@ async def get_house_details_tool(request: Request):
 
 
 @app.post("/find_distance_tool")
-async def find_distance_tool(request: Request):
+async def find_distance_tool(request: Request, request_body: RequestBody):
     chatmodel = Model()
     res = await request.json()
     email = res.get("email")
@@ -478,6 +600,8 @@ async def find_distance_tool(request: Request):
     place_address = res["customData"].get("place_address", "")
     print("ADDRESS: ", address)
     print("PLACE_ADDRESS: ", place_address)
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
     city_state = address.split(",")
     print("FIRST_SPLIT_ADDRESS: ", city_state)
     if len(city_state) > 2:
@@ -573,7 +697,7 @@ Assistant :
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id}
+        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id, "location_id": location_id}
         async with session.post(webhook_url, json=payload) as response:
             pass
 
@@ -683,6 +807,8 @@ async def realtor_get_property_details(request: Request):
     contact_id = res.get("customData").get("contact_id")
     messages = chatmodel.history_add(message_history, contact_name)
     result = realtor_get_house_details(user_query)
+    # Get location ID from GHL
+    location_id = await get_ghl_location_id(email, phone)
     messages.append(SystemMessage(
             content=f"""This is User message:{user_message}.
             Property located at {address}.
@@ -696,7 +822,7 @@ async def realtor_get_property_details(request: Request):
     async with aiohttp.ClientSession() as session:
         webhook_url = "https://hook.us1.make.com/shkla22h4n5o0teeqvwl4x7lcoy977vs"
         #webhook_url = "https://hooks.zapier.com/hooks/catch/15488019/3s3kzre/"
-        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id}
+        payload = {"bot_response": result, "phone": phone, "email": email, "contact_id": contact_id, "location_id": location_id}
         async with session.post(webhook_url, json=payload) as response:
             pass
 

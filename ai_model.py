@@ -104,59 +104,57 @@ functions = [
 
 
 
-
-
 def get_agent_listings(agent_id: str):
-    """Tool that get all active listings of provided agent"""
+    """Tool that gets all active listings of provided agent"""
     all_listings = []
     page_number = 1
+    size = 5  # Number of listings per page
     while True:
-
-        querystring = {"zuid": agent_id, "page": str(page_number)}
-        print(querystring)
+        querystring = {"zuid": agent_id, "page": str(page_number), "size": str(size)}
         url = "https://zillow-com1.p.rapidapi.com/agentActiveListings"
         headers = {
             "X-RapidAPI-Key": os.getenv("X-RapidAPI-Key"),
             "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com"
         }
 
-        time.sleep(1.5)
+        time.sleep(1.5)  # To avoid hitting the API rate limit
         response = requests.get(url, headers=headers, params=querystring)
 
-        lis = response.json().listings
+        # Safely handle the JSON response
+        lis = response.json().get("listings", [])
         if lis:
             all_listings.extend(lis)
-        if len(lis) < 10:
+
+        # Stop if fewer than 'size' listings are returned (indicating the last page)
+        if len(lis) < size:
             break
         else:
             page_number += 1
-    print("all_listings: ", len(all_listings))
-    photos = {}
-    if all_listings:
-        for element in all_listings:
-            photos[element["address"]["line1"] + ", " + element["address"]["line2"]] = element["primary_photo_url"]
+
+    print(f"Total listings retrieved: {len(all_listings)}")
+    
+    # Collect photos from the listings
+    photos = {
+        f'{el["address"]["line1"]}, {el["address"].get("line2", "")}': el["primary_photo_url"]
+        for el in all_listings
+        if "primary_photo_url" in el
+    }
+
     return {"res": all_listings, "photos": photos}
 
 
-
 def check_matched_properties(agent_id, func_result):
-    """Check whick objects from agent listings matched search result"""
-    listings = get_agent_listings(agent_id)
-    zpids_agent = []
-    for el in listings:
-        zp_id = el.get("zpid")
-        if zp_id:
-            zpids_agent.append(zp_id)
+    """Check which properties from agent listings match the search result"""
+    listings_data = get_agent_listings(agent_id)
+    listings = listings_data["res"]  # Retrieve the listings from the result
+    zpids_agent = [el.get("zpid") for el in listings if el.get("zpid")]
 
-    matched_homes = []
-    for el in func_result:
-        zpid = el.get("zpid")
-        if zpid and zpid in zpids_agent:
-            matched_homes.append(el)
+    matched_homes = [el for el in func_result if el.get("zpid") in zpids_agent]
+    
     if matched_homes:
         return matched_homes
     else:
-        return "There are no such properties in agent listings"
+        return "There are no matching properties in the agent's listings"
 
 
 
@@ -177,6 +175,9 @@ def find_zpid(
 ) -> dict|str:
     """Tool that uses Zillow api to find zpid given adress of the house. Use case find zpid when need to use get_house_property tool. Valid params include "location":"location"."""
 
+    if not location:
+        return "Location not provided."
+    
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
 
     headers = {
@@ -184,12 +185,9 @@ def find_zpid(
         "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
     }
 
-    querystring = {"page": "1"}
+    querystring = {"location": location,"page": "1"}
     print("LOCATION: ", location)
-    if location is not None:
-        querystring["location"] = location
-
-
+    print("QUERYSTRING: ", querystring)
     # print(f'Search with {querystring}')
     time.sleep(1.3)
 
@@ -197,25 +195,23 @@ def find_zpid(
     result = requests.get(base_url, params=querystring, headers=headers)
     # print("FIND_ZPID_RESULT: ", result.json())
     try:
+        data = result.json()
         if isinstance(result.json(), list):
-            return result.json()[0]["zpid"]
-        return result.json()["zpid"]
-    except:
-        return "Sorry, could you please give full address"
+            return data[0].get("zpid", "ZPID not found")
+        return data.get("zpid", "ZPID not found")
+    except Exception as e:
+        return f"Error fetching ZPID: {str(e)}"
 
 
 def post_process_house_property(house_property):
 
     """Remove some information from zillow listing to fit into LLM's context """
     print("HOUSE_PROPERTY_VARIABLE: ", house_property)
-    house_property.pop('nearbyHomes')
-    house_property.pop('listed_by')
-    house_property.pop("brokerageName")
-    house_property.pop("contact_recipients")
-    house_property.pop('priceHistory')
-    house_property.pop('resoFacts')
-    house_property.pop('attributionInfo')
-    house_property.pop('taxHistory')
+    keys_to_remove = [
+        "nearbyHomes", "listed_by", "brokerageName", "contact_recipients", "priceHistory", "resoFacts", "attributionInfo", "taxHistory"
+    ]
+    for key in keys_to_remove:
+        house_property.pop(key, None) # safely remove key if exists
 
     return house_property
 
@@ -243,9 +239,14 @@ def __get_info_about_home_from_zillow(location: str):
     time.sleep(1.5)
     result = requests.get(base_url, params=querystring, headers=headers)
     print("RESULT: ", result)
-
-    return result
-
+    
+    if result.status_code == 200:
+        try:
+            return result.json()
+        except Exception as e:
+            return f"Error fetching data: {str(e)}"
+    else:
+        return f"Error fetching data: {result.text}"
 
 def get_house_property(
     location: Optional[str] = None,
@@ -259,7 +260,9 @@ def get_house_property(
         requests.post(webhook_url, json=payload)
 
         return result
-    post_processed = post_process_house_property(result.json())
+    print("RESULT: ", result)
+    post_processed = post_process_house_property(result)
+    print("POST_PROCESSED: ", post_processed)
     return post_processed
 
 
@@ -401,7 +404,9 @@ def get_tax_informatiom(location: str) -> dict:
     result = __get_info_about_home_from_zillow(location)
     if isinstance(result, str):
         return result
-    post_processed = result.json()["taxHistory"]
+        print("RESULT: ", result)
+    post_processed = result["taxHistory"]
+    print("POST_PROCESSED: ", post_processed)
 
     # remove data, when the date was before this
     comparison_date = datetime(2014, 1, 1)
@@ -414,7 +419,7 @@ def get_tax_informatiom(location: str) -> dict:
 
     post_processed = remove_data_about_dates_before_date(post_processed)
 
-    priceHistory = result.json()["priceHistory"]
+    priceHistory = result["priceHistory"]
     # remove useless data
     for i in range(len(priceHistory)):
         if "attributeSource" in priceHistory[i].keys():
@@ -426,16 +431,16 @@ def get_tax_informatiom(location: str) -> dict:
     post_processed.append(priceHistory)
 
     post_processed.append(
-        {"current_price": f"{result.json()['price']} {result.json()['currency']}"}
+        {"current_price": f"{result['price']} {result['currency']}"}
     )
-    post_processed.append({"propertyTaxRate": result.json()["propertyTaxRate"]})
+    post_processed.append({"propertyTaxRate": result["propertyTaxRate"]})
 
     return post_processed
 
 
 def search_properties_without_address(user_input: str):
     """Search properties without address tool, useful when need to search properties without specific address"""
-    response = client.chat.completions.create(model="gpt-3.5-turbo-0613",
+    response = client.chat.completions.create(model="gpt-4o-mini",
     messages=[
         {
             "role": "system",
@@ -473,9 +478,6 @@ def search_properties_without_address(user_input: str):
         querystring["bathsMax"] = querystring.get("bathsMin")
     elif querystring.get("bathsMax") and not querystring.get("bathsMin"):
         querystring["bathsMin"] = querystring.get("bathsMax")
-
-    querystring["bathsMax"] += 2
-    querystring["bedsMax"] += 2
 
     base_url = "https://zillow-com1.p.rapidapi.com/propertyExtendedSearch"
     for key, value in querystring.items():
@@ -569,7 +571,7 @@ class Model():
         tools = [get_house_details_tool, find_properties_without_address_tool, google_places, find_distance_tool,find_nearby_homes,get_tax_or_price_info]
 
         self.memory = ConversationBufferMemory(memory_key="chat_history")
-        llm = ChatOpenAI(temperature=0.0,openai_api_key=os.getenv('OPENAI_API_KEY'),max_tokens=512,model="gpt-3.5-turbo-16k")
+        llm = ChatOpenAI(temperature=0.0,openai_api_key=os.getenv('OPENAI_API_KEY'),max_tokens=512,model="gpt-4o-mini")
 
 
         def _handle_error(error) -> str:
@@ -671,7 +673,7 @@ class Model():
 
     def enhance_ai_response(self,user_input,rough_ai_response,previous_human_messages, previous_ai_messages):
         """Additional ChatGPT request to enhance AI response"""
-        llm = ChatOpenAI(temperature=0.7,max_tokens=450,model="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.7,max_tokens=450,model="gpt-4o-mini")
 
         messages = [
             SystemMessage(
@@ -710,7 +712,7 @@ class Model():
 
 
     def get_summary_of_conversation(self,conversation):
-        llm = ChatOpenAI(temperature=0.0,model="gpt-3.5-turbo-16k")
+        llm = ChatOpenAI(temperature=0.0,model="gpt-4o-mini")
         prefix = """Here is client communication with ai agent named Rick, please give the output using the instructions below.Main rule is DO NOT BE REPETITIVE!"""
         sufix = """Follow this instructions: INSTRUCTION_1 = short summary (2-3 sentences) of the conversation with client's main requirements and very important things which we need to negotiate in person to make a deal, like mortgage, discount and other very important questions. INSTRUCTION_2 = and key questions on which AI didn't give response during conversation (this question usualy has "I am sorry", "I don't know", "I apologize" etc. - write ONLY this questions). Don't be repetitive.INSTRUCTIONS_3 = If there is no information about scheduled appointment such as video call or tour and date and time - dont write about this anything, otherwise provide appointment details. Always use client name at the start. If client name wasn't specified then use "Customer" instead.
 Provide output in format
