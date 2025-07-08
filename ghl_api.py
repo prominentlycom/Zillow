@@ -25,6 +25,7 @@ async def get_ghl_location_id(contact_id: Optional[str] = None, email: Optional[
             os.getenv('GHL_API_Key')
         ]
     api_keys = [k for k in api_keys if k]  # Remove None values
+    print("DEBUG: GHL API keys being used:", api_keys)
 
     print("api keys: ", api_keys)
     
@@ -47,8 +48,11 @@ async def get_ghl_location_id(contact_id: Optional[str] = None, email: Optional[
                         data = await response.json()
                         print("CONTACTID DATA: ", data)
                         if data and 'contact' in data:
-                            print(f"Successfully found Location ID using API Key #{i}")
-                            return data['contact']['locationId']
+                         print(f"Successfully found Location ID using API Key #{i}")
+                           location_id = data['contact']['locationId']
+                            print(f"DEBUG: Location ID found: {location_id}")
+                            return location_id
+
         
         # # If contact_id lookup failed or wasn't available, try email
         # print("EMAIL: ", email)
@@ -76,6 +80,7 @@ async def get_ghl_location_id(contact_id: Optional[str] = None, email: Optional[
         #     elif len(phone_clean) == 11 and phone_clean.startswith('1'):
         #         phone_clean = f"+{phone_clean}"
             
+<<<<<<< HEAD
         #     print("FORMATTED PHONE: ", phone_clean)
         #     url = f"https://rest.gohighlevel.com/v1/contacts/lookup?phone={phone_clean}"
         #     async with aiohttp.ClientSession() as session:
@@ -90,6 +95,24 @@ async def get_ghl_location_id(contact_id: Optional[str] = None, email: Optional[
         #             else:
         #                 response_text = await response.text()
         #                 print("ERROR RESPONSE: ", response_text)
+=======
+            print("FORMATTED PHONE: ", phone_clean)
+            url = f"https://rest.gohighlevel.com/v1/contacts/lookup?phone={phone_clean}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    print("PHONE RESPONSE: ", response.status)
+                    if response.status == 200:
+                        data = await response.json()
+                        print("PHONE DATA: ", data)
+                        if data and 'contacts' in data and len(data['contacts']) > 0:
+                            print(f"Successfully found Location ID using API Key #{i}")
+                            location_id = data['contacts'][0]['locationId']
+                            print(f"DEBUG: Location ID found: {location_id}")
+                            return location_id
+                    else:
+                        response_text = await response.text()
+                        print("ERROR RESPONSE: ", response_text)
+>>>>>>> dd65d3593483260a0b30197f886498d475e4c5b7
     
     print("No Location ID found with any API key")
     return None
