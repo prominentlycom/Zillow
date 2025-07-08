@@ -25,6 +25,7 @@ async def get_ghl_location_id(email: Optional[str] = None, phone: Optional[str] 
             os.getenv('GHL_API_Key')
         ]
     api_keys = [k for k in api_keys if k]  # Remove None values
+    print("DEBUG: GHL API keys being used:", api_keys)
 
     # Try each API key in order
     for i, api_key in enumerate(api_keys, 1):
@@ -46,7 +47,9 @@ async def get_ghl_location_id(email: Optional[str] = None, phone: Optional[str] 
                         print("EMAIL DATA: ", data)
                         if data and 'contacts' in data and len(data['contacts']) > 0:
                             print(f"Successfully found Location ID using API Key #{i}")
-                            return data['contacts'][0]['locationId']
+                            location_id = data['contacts'][0]['locationId']
+                            print(f"DEBUG: Location ID found: {location_id}")
+                            return location_id
         
         # If email lookup failed or wasn't available, try phone
         if phone:
@@ -70,7 +73,9 @@ async def get_ghl_location_id(email: Optional[str] = None, phone: Optional[str] 
                         print("PHONE DATA: ", data)
                         if data and 'contacts' in data and len(data['contacts']) > 0:
                             print(f"Successfully found Location ID using API Key #{i}")
-                            return data['contacts'][0]['locationId']
+                            location_id = data['contacts'][0]['locationId']
+                            print(f"DEBUG: Location ID found: {location_id}")
+                            return location_id
                     else:
                         response_text = await response.text()
                         print("ERROR RESPONSE: ", response_text)
